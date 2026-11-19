@@ -108,11 +108,7 @@
         }
       },
       "Merge System Volume": {
-        "/System/Library/Frameworks": {
-          "ImageIO.framework": "26.0-25G229"
-        },
         "/System/Library/PrivateFrameworks": {
-          "CMPhoto.framework": "26.0-25G229",
           "GPUCompiler.framework": "13.2.1-25"
         }
       }
@@ -359,20 +355,6 @@
     {
       "patch": "Nvidia Kepler",
       "operation": "Merge System Volume",
-      "destination": "/System/Library/Frameworks/ImageIO.framework",
-      "source_version": "26.0-25G229",
-      "support_package_relative_path": "26.0-25G229/System/Library/Frameworks/ImageIO.framework"
-    },
-    {
-      "patch": "Nvidia Kepler",
-      "operation": "Merge System Volume",
-      "destination": "/System/Library/PrivateFrameworks/CMPhoto.framework",
-      "source_version": "26.0-25G229",
-      "support_package_relative_path": "26.0-25G229/System/Library/PrivateFrameworks/CMPhoto.framework"
-    },
-    {
-      "patch": "Nvidia Kepler",
-      "operation": "Merge System Volume",
       "destination": "/System/Library/PrivateFrameworks/GPUCompiler.framework",
       "source_version": "13.2.1-25",
       "support_package_relative_path": "13.2.1-25/System/Library/PrivateFrameworks/GPUCompiler.framework"
@@ -407,7 +389,7 @@
     }
   ],
   "schema": 1,
-  "name": "mbp91-legacy-hardware-darwin25-local-v1",
+  "name": "mbp91-legacy-hardware-darwin25-kepler-imaging-experiment",
   "model": "MacBookPro9,1",
   "donor_policy": {
     "darwin_major": 25,
@@ -439,6 +421,7 @@
       "EFI wireless kext selection for the actual BCM43602, not the stock BCM4331",
       "Remaining Golden Gate/Tahoe/runtime build inputs and target-aware producers",
       "Full OS image build and actual boot validation"
-    ]
+    ],
+    "experiment": "Unbooted USB comparison on MacBookPro9,1. A fresh assembly omits the 25G229 Kepler ImageIO and CMPhoto donor merges."
   }
 }
