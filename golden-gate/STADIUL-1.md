@@ -39,6 +39,14 @@ Proba confirmă execuția operațiilor Metal de umplere și copiere pe GT 650M. 
 
 StefanAlMare a raportat Wi-Fi, Bluetooth, sunet, USB, trackpad și tastatură funcționale, inclusiv tastele de luminozitate și volum. Unele pictograme din bara de meniu rămâneau invizibile deși răspundeau la clic, volumele de pe desktop aveau pictograme de folder, iar în Configurări sistem lipseau pictograme. Cauza rămâne deschisă.
 
+## Finder și IconServices după autentificare
+
+După relansare, Finder a deschis un dosar gol. Preferințele pentru bara de cale și bara de stare au fost citite ca activate. StefanAlMare a confirmat că Finder a răspuns în cele din urmă, cu întârziere mare, iar volumele au păstrat pictogramele de folder. Lentoarea s-a manifestat și în afara volumului Tahoe.
+
+Pe sistemul 26B131 pornit, `hao --aot --check` a confirmat cod precompilat valid pentru **Finder și iconservicesagent** în `/private/var/db/hao`. La verificări lipsea indexul IconServices al contului (`store.index`), inclusiv după repornirea confirmată a agentului. În captura anterioară apar și cereri de imagini eșuate (Foundation 4097) și conexiuni XPC refuzate. Motivul refuzurilor rămâne deschis.
+
+Pentru comparația pe o copie separată, rețeta originală de pictograme cere depozitul comun și indexul de utilizator corespunzător, din același build 26B131. Se verifică aceeași fereastră goală, aceeași pictogramă de volum și dacă Finder mai înregistrează erori XPC. Fișierele AOT validate pot fi păstrate pentru această probă.
+
 ## Următoarea probă pe copia externă
 
 În privința stocării, rămâne de verificat fiecare volum NTFS și exFAT separat, prin identificarea UUID-ului, montare manuală doar pentru citire, citirea unui fișier cunoscut și demontare. Pentru alte Mac-uri Intel și Hackintosh se păstrează fișe de probă independente.

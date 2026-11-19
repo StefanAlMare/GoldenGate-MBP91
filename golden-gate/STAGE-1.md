@@ -41,6 +41,14 @@ PASS: NVIDIA GeForce GT 650M | Metal render clear + readback | 16/16 pixels
 
 This confirms that the GT 650M executed a Metal render-pass clear and returned the expected pixel values. Shader execution and GMUX display switching remain untested.
 
+## Finder and IconServices after login
+
+A separate Finder relaunch opened an empty folder. The path-bar and status-bar preferences both read back as enabled. StefanAlMare reported that Finder eventually responded, still with a long delay, and the drive icons still looked like folders. The slowdown also occurred outside the Tahoe volume.
+
+On the running 26B131 system, `hao --aot --check` reported valid precompiled code for **both Finder and iconservicesagent** under `/private/var/db/hao`. The per-user IconServices index (`store.index`) was missing at the time of the checks, including after a verified restart of the user agent. The earlier capture also recorded failed image requests (Foundation 4097) and XPC listener rejections. The reason for those rejections remains open.
+
+For a comparison on a separate test copy, the upstream icon recipe needs a matching 26B131 shared icon store and its user index. Check the same empty window and the same volume icon, and record whether Finder still receives XPC errors alongside the visual result. The validated AOT files need no rebuild for this comparison.
+
 ## Open observations and next tests
 
 - Some menu-bar controls opened when clicked even though their icons were invisible. Desktop drive icons appeared as folders, and icons were missing in System Settings. The cause remains open.
