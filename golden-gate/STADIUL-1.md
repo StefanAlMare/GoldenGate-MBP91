@@ -45,7 +45,13 @@ După relansare, Finder a deschis un dosar gol. Preferințele pentru bara de cal
 
 Pe sistemul 26B131 pornit, `hao --aot --check` a confirmat cod precompilat valid pentru **Finder și iconservicesagent** în `/private/var/db/hao`. La verificări lipsea indexul IconServices al contului (`store.index`), inclusiv după repornirea confirmată a agentului. În captura anterioară apar și cereri de imagini eșuate (Foundation 4097) și conexiuni XPC refuzate. Motivul refuzurilor rămâne deschis.
 
-Pentru comparația pe o copie separată, rețeta originală de pictograme cere depozitul comun și indexul de utilizator corespunzător, din același build 26B131. Se verifică aceeași fereastră goală, aceeași pictogramă de volum și dacă Finder mai înregistrează erori XPC. Fișierele AOT validate pot fi păstrate pentru această probă.
+### Indexul de pictograme instalat pe MacBook
+
+Sistemul Apple 26B131 și imaginea construită conțineau copii identice, octet cu octet, ale Finder.icns, GenericFolderIcon.icns, pictogramei discului intern și cataloagelor grafice Finder și CoreTypes. În sistemul Apple original și în volumele System/Data ale imaginii construite nu exista un index IconServices populat înainte de pornire.
+
+Pe MacBook-ul pornit, depozitul comun pentru limba română conținea 243 de fișiere de pictograme cu date. Contul folosit de Setup Assistant avea deja un index pentru buildul 26B131 și limba română. Toate cele 456 de înregistrări făceau trimitere la fișiere existente pe această instalare, 228 de fișiere distincte. Contul de sistem avea și el un index compatibil, mai mic. Reparația a instalat indexul de la Setup în cache-ul contului grafic, în locul unde lipsea, apoi a relansat agentul de pictograme al acelui cont. După relansare, indexul de 720.896 de octeți era încă prezent. Depozitul comun și volumul Tahoe au rămas intacte.
+
+Instalarea este confirmată. Rămân de verificat aspectul pictogramei discului Tahoe, timpul de răspuns al meniului Vizualizare din Finder și persistența erorilor XPC.
 
 ## Următoarea probă pe copia externă
 

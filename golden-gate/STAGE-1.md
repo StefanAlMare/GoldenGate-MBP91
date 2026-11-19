@@ -47,7 +47,13 @@ A separate Finder relaunch opened an empty folder. The path-bar and status-bar p
 
 On the running 26B131 system, `hao --aot --check` reported valid precompiled code for **both Finder and iconservicesagent** under `/private/var/db/hao`. The per-user IconServices index (`store.index`) was missing at the time of the checks, including after a verified restart of the user agent. The earlier capture also recorded failed image requests (Foundation 4097) and XPC listener rejections. The reason for those rejections remains open.
 
-For a comparison on a separate test copy, the upstream icon recipe needs a matching 26B131 shared icon store and its user index. Check the same empty window and the same volume icon, and record whether Finder still receives XPC errors alongside the visual result. The validated AOT files need no rebuild for this comparison.
+### Icon index installed on the test Mac
+
+The stock Apple 26B131 system and the assembled image contained byte-identical copies of Finder.icns, GenericFolderIcon.icns, the internal disk icon, and the Finder and CoreTypes asset catalogs. The original System and the assembled System/Data volumes contained no populated IconServices index before boot.
+
+On the running MacBook, the shared Romanian store contained 243 nonempty units. The local Setup Assistant account already had an index for 26B131 and Romanian. All 456 records referred to units present on this same installation, covering 228 distinct units. The system account also held a smaller matching index. The repair installed the Setup account's index at the previously missing path in the desktop user's cache, then relaunched that user's IconServices agent. The 720,896-byte index remained present immediately after relaunch. The shared store and the Tahoe volume were untouched.
+
+Installation is verified. The next acceptance checks are the appearance of the Tahoe drive icon and the responsiveness of the Finder View menu. Whether the earlier XPC errors persist after installing the index is still open.
 
 ## Open observations and next tests
 
