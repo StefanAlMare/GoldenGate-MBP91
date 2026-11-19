@@ -2,7 +2,7 @@
 
 [English](STAGE-1.md) · **Română**
 
-StefanAlMare a pornit Golden Gate 27.2.1 (26B131) de pe un SSD USB extern pe MacBookPro9,1 și a început configurarea în Setup Assistant. Confirmarea acestei ultime probe este vizuală. Capturile detaliate disponibile în registrul local provin din pornirile anterioare, când configurarea se bloca.
+StefanAlMare a pornit Golden Gate 27.2.1 (26B131) de pe un SSD USB extern pe MacBookPro9,1 și a început configurarea în Setup Assistant. A confirmat vizual apariția interfeței Setup Assistant. Capturile detaliate disponibile în registrul local provin din pornirile anterioare, când configurarea se bloca.
 
 ## Configurația fizică
 
@@ -25,13 +25,23 @@ StefanAlMare a pornit Golden Gate 27.2.1 (26B131) de pe un SSD USB extern pe Mac
 
 În pornirile blocate, serviciul de configurare aștepta discul RAM al utilizatorului temporar. DiskImages2 aștepta ca Disk Arbitration să termine operațiile în curs. În același interval, diskarbitrationd aștepta în LiveFSMountClient, iar fskitd avea un fir în mount(2). Stivele nu identifică volumul transmis apelului. Succesiunea probelor susține investigarea automontării pe acest Mac. Contribuția individuală a exFAT și cauza internă a blocajului rămân de stabilit.
 
+## Repornirea și proba fizică Metal din 19 noiembrie
+
+StefanAlMare a ajuns la desktop, a repornit și s-a autentificat din nou. În sesiunea respectivă, inventarul grafic arăta ecranul intern de 1680 × 1050 pe Intel HD 4000. Golden raporta Metal 2 pentru ambele plăci și 512 MB VRAM pentru GeForce GT 650M.
+
+[Rulat pe MacBook prin SSH, testul Metal](diagnostics/metal-check.m) a selectat explicit GT 650M. Identificatorul Metal `0x1000004b7` corespunde serviciului `nvAccelerator` din IORegistry la această pornire. GPU-ul a umplut cu roșu o suprafață RGBA de 4 × 4 pixeli. Testul a copiat rezultatul într-un buffer, l-a sincronizat și a verificat fiecare pixel pe CPU.
+
+```text
+PASS: NVIDIA GeForce GT 650M | Metal render clear + readback | 16/16 pixels
+```
+
+Proba confirmă execuția operațiilor Metal de umplere și copiere pe GT 650M. Execuția shaderelor și comutarea ecranului intern prin GMUX necesită probe separate.
+
+StefanAlMare a raportat Wi-Fi, Bluetooth, sunet, USB, trackpad și tastatură funcționale, inclusiv tastele de luminozitate și volum. Unele pictograme din bara de meniu rămâneau invizibile deși răspundeau la clic, volumele de pe desktop aveau pictograme de folder, iar în Configurări sistem lipseau pictograme. Cauza rămâne deschisă.
+
 ## Următoarea probă pe copia externă
 
-1. Cu aceeași imagine, EFI, runtime și aceleași două reguli, se consemnează finalizarea Setup și apariția Finder. Se păstrează captura asociată acelei porniri.
-2. Se verifică separat o repornire, autentificarea și revenirea la desktop.
-3. După un login stabil, se verifică pe rând câte un volum, identificat din nou după UUID: montare manuală doar pentru citire, citirea unui fișier cunoscut și demontare. Se consemnează rezultatul pentru fiecare sistem de fișiere.
-
-Randarea pe GT 650M, comutarea GMUX, alte Mac-uri Intel și Hackintosh necesită probe fizice proprii. Kitul portabil din această ramură inventariază discurile și generează o previzualizare a regulilor pentru volume selectate explicit.
+În privința stocării, rămâne de verificat fiecare volum NTFS și exFAT separat, prin identificarea UUID-ului, montare manuală doar pentru citire, citirea unui fișier cunoscut și demontare. Pentru alte Mac-uri Intel și Hackintosh se păstrează fișe de probă independente.
 
 ## Proveniența ramurii
 

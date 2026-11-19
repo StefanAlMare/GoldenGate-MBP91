@@ -8,7 +8,7 @@ StefanAlMare booted Golden Gate 27.2.1 (26B131) from an external USB SSD on a Ma
 
 | Component | Reference |
 |---|---|
-| Mac | 15-inch MacBook Pro, Mid 2012, with Ivy Bridge, Intel HD 4000, NVIDIA GeForce GT 650M and GMUX. An earlier capture showed the Intel GPU driving the internal display. |
+| Mac | 15-inch MacBook Pro, Mid 2012, with Ivy Bridge, Intel HD 4000, NVIDIA GeForce GT 650M and GMUX. The post-restart display inventory listed the 1680 × 1050 internal LCD under Intel HD 4000. |
 | Storage | The internal disk held Tahoe/OCLP and the NTFS and exFAT volumes. Golden Gate ran from the external USB SSD. The Tahoe donor build was 25G342. |
 | Builder used for the physical test | [hao-patcher 6bd75aa](https://github.com/lythka/hao-patcher/commit/6bd75aab112d1078acd8e75180eb510672461365) with local MacBookPro9,1 adaptations |
 | Locally built runtime | `1547dcb4e19a2ab0843086e3288223f998507a4c`. The x86_64 Mach-O UUID for `libhao` in the stack traces matched the local binary. Its SHA-256 was `11760e88422c301f2d99f32581902c4e891e7819110aab0565e65e14f34a1a45`. |
@@ -25,13 +25,27 @@ StefanAlMare booted Golden Gate 27.2.1 (26B131) from an external USB SSD on a Ma
 
 On the stalled boots, the setup service was waiting for the temporary user’s RAM disk. DiskImages2 was waiting for Disk Arbitration to finish its pending operations. During the same interval, `diskarbitrationd` was waiting in `LiveFSMountClient`, and a thread in `fskitd` was in `mount(2)`. The stack traces did not identify which volume the call targeted. The sequence points to automount as an area to investigate on this Mac. The specific role of exFAT and the cause of the stall remain open.
 
-## Next test on the external copy
+## Desktop, restart and GPU test on 19 November 2026
 
-1. Keep the same image, EFI, runtime and two volume rules. Record whether setup completes and Finder appears. Save the diagnostic capture for that boot.
-2. Test a restart separately. Record whether login succeeds and the desktop returns.
-3. After a stable login, test one volume at a time. Confirm its UUID, request a manual read-only mount, read a known file and unmount the volume. Record the result separately for NTFS and exFAT.
+StefanAlMare reached the desktop, restarted the Mac and signed in again successfully. An SSH session from the iMac reached the MacBookPro9,1 on build 26B131. During hands-on use, StefanAlMare reported working Wi-Fi, Bluetooth, sound, USB, trackpad and keyboard, including the brightness and volume keys.
 
-GT 650M rendering, GMUX switching, other Intel Macs and Hackintosh systems each require physical tests. The volume kit on this branch inventories disks and previews rules for the volumes the operator selects.
+| Evidence | Observation |
+|---|---|
+| Display inventory after restart | The internal LCD was online under Intel HD 4000. The GT 650M reported 512 MB VRAM on PCIe x8. Both GPUs reported Metal 2 support. |
+| I/O Registry | Both accelerators were active. The NVIDIA accelerator had registry ID `0x1000004b7`. |
+| Metal probe over SSH | The probe enumerated both GPUs and selected the NVIDIA device with that same registry ID. It cleared a 4 × 4 RGBA texture to red, copied the result to a CPU-readable buffer and verified all 16 pixels. [Probe source](diagnostics/metal-check.m) |
+
+```text
+PASS: NVIDIA GeForce GT 650M | Metal render clear + readback | 16/16 pixels
+```
+
+This confirms that the GT 650M executed a Metal render-pass clear and returned the expected pixel values. Shader execution and GMUX display switching remain untested.
+
+## Open observations and next tests
+
+- Some menu-bar controls opened when clicked even though their icons were invisible. Desktop drive icons appeared as folders, and icons were missing in System Settings. The cause remains open.
+- The next storage test is a manual read-only mount after login on the external Golden installation. Test NTFS and exFAT separately, verify the UUID, read a known file and unmount each volume.
+- Other Intel Macs and Hackintosh systems require their own hardware tests. The volume kit on this branch inventories disks and previews rules for the selected volumes.
 
 ## Source history
 
