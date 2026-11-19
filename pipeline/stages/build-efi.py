@@ -17,6 +17,32 @@ SETTINGS = {'sip_status', 'secure_status', 'serial_settings', 'opencore_debug',
             'showpicker', 'oc_timeout', 'disable_mediaanalysisd', 'boot_efi'}
 
 
+
+# BEGIN HAO-MBP91-WIFI-V1
+# The build host is never probed. The override is restricted to the measured
+# MBP9,1 + BCM43602 combination; OCLP itself selects the corresponding kexts.
+def _mbp91_wireless_override(recipe, device_probe, smbios_data):
+    value = recipe.get('efi_build', {}).get('wireless_override')
+    if value is None:
+        return None
+    expected = {'vendor_id': '0x14e4', 'device_id': '0x43ba',
+                'oclp_chipset': 'AirportBrcmNIC'}
+    if (recipe.get('model') != 'MacBookPro9,1' or
+            recipe.get('board_id') != 'Mac-4B7AC7E43945597E' or value != expected):
+        raise ValueError('unreviewed target wireless override')
+    pci = recipe.get('oclp_hardware_profile', {}).get('pci', [])
+    if not any(str(d.get('vendor_id', '')).lower() == '0x14e4' and
+               str(d.get('device_id', '')).lower() == '0x43ba' and
+               str(d.get('class_code', '')).lower() == '0x028000' for d in pci):
+        raise ValueError('BCM43602 missing from the recorded target hardware')
+    model = recipe['model']
+    previous = smbios_data.smbios_dictionary[model]
+    replacement = dict(previous)
+    replacement['Wireless Model'] = device_probe.Broadcom.Chipsets.AirportBrcmNIC
+    smbios_data.smbios_dictionary[model] = replacement
+    return previous
+# END HAO-MBP91-WIFI-V1
+
 def build(source, site, target, revision, opencore, out):
     source, target, out = Path(source).resolve(), Path(target), Path(out).resolve()
     opencore=Path(opencore)
@@ -38,6 +64,7 @@ def build(source, site, target, revision, opencore, out):
     from opencore_legacy_patcher import constants
     from opencore_legacy_patcher.detections import device_probe
     from opencore_legacy_patcher.efi_builder.build import BuildOpenCore
+    from opencore_legacy_patcher.datasets import smbios_data
     out.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='efi-build-', dir=out.parent) as temporary:
         configuration = constants.Constants()
@@ -51,12 +78,19 @@ def build(source, site, target, revision, opencore, out):
             if type(value) is not type(getattr(configuration,name)):
                 raise ValueError('wrong type for EFI setting: '+name)
             setattr(configuration,name,value)
-        BuildOpenCore(recipe['model'], configuration)
+        previous_model_data = _mbp91_wireless_override(recipe, device_probe, smbios_data)
+        try:
+            BuildOpenCore(recipe['model'], configuration)
+        finally:
+            if previous_model_data is not None:
+                smbios_data.smbios_dictionary[recipe['model']] = previous_model_data
         generated = configuration.opencore_release_folder
         config_path = generated/'EFI/OC/config.plist'
         config = plistlib.loads(config_path.read_bytes())
         config['#Revision']['Build-Version'] = configuration.patcher_version+' source '+revision
         config['#Revision']['OpenCore-Version'] = selected[1]+' - '+selected[2]
+        if recipe.get('efi_build', {}).get('wireless_override'):
+            config['#Revision']['Hardware-Wifi'] = '0x14e4:0x43ba'
         # The model builder's bundled core can differ from our selected release.
         # Replace the complete selected OpenCore binary family, not just its core.
         with zipfile.ZipFile(opencore) as archive:
@@ -81,6 +115,7 @@ def build(source, site, target, revision, opencore, out):
                       target_sha256=hashlib.sha256(target.read_bytes()).hexdigest(),
                       files={str(p.relative_to(out)):hashlib.sha256(p.read_bytes()).hexdigest()
                              for p in sorted(out.rglob('*')) if p.is_file()},
+                      wireless_override=recipe.get('efi_build', {}).get('wireless_override'),
                       scope='base EFI; image-specific hao additions are applied during image assembly')
     return record
 

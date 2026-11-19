@@ -76,6 +76,7 @@ def main():
     make = sub.add_parser('build')
     for name in ('psp-root','psp-archive','rsr-repair','out'):
         make.add_argument('--'+name,type=Path,required=True)
+    make.add_argument('--profile',type=Path,default=HERE/'profiles/mbp92.json')
     apply = sub.add_parser('apply')
     for name in ('artifact','system-root','data-root'):
         apply.add_argument('--'+name,type=Path,required=True)
@@ -83,7 +84,7 @@ def main():
     apply.add_argument('--report',type=Path)
     args = parser.parse_args()
     if args.command == 'build':
-        print(build(args.psp_root,args.psp_archive,args.rsr_repair,args.out))
+        print(build(args.psp_root,args.psp_archive,args.rsr_repair,args.out,profile_path=args.profile))
     else:
         result = runpy.run_path(str(HERE/'lib/installer.py'))['apply'](args.artifact,args.system_root,args.data_root,args.owner)
         body = json.dumps(result,indent=2)+'\n'

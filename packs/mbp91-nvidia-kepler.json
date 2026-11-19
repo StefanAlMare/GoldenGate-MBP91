@@ -1,0 +1,17 @@
+{
+  "format": 1,
+  "description": "Local MBP9,1 Kepler donor map, applied by the hardware base layer; unvalidated.",
+  "detect": {
+    "oclp_patchsets": [
+      "Nvidia Kepler"
+    ]
+  },
+  "oclp_patchsets": [
+    "Nvidia Kepler"
+  ],
+  "phase": "installer",
+  "proven_on": [],
+  "layer": "platform",
+  "kind": "gpu",
+  "platform": "apple-intel"
+}

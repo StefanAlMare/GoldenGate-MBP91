@@ -1,0 +1,394 @@
+{
+  "model": "MacBookPro9,1",
+  "board_id": "Mac-4B7AC7E43945597E",
+  "gpu": "Intel HD Graphics 4000 + NVIDIA GeForce GT 650M (GMUX)",
+  "facts": {
+    "gpu": [
+      "intel-ivb",
+      "nvidia-kepler"
+    ],
+    "firmware": "none"
+  },
+  "oclp_hardware_profile": {
+    "format": 1,
+    "sources": {
+      "identity": "local/mbp91/profile.json, cross-checked on the target",
+      "pci": "Recursive ioreg -a -r -c IOPCIDevice; paths included only when reported",
+      "cpu": "sysctl on MacBookPro9,1",
+      "patch_sets": "Reviewed local OCLP donor map: tools/oclp-hardware/profiles/mbp91.json"
+    },
+    "model": "MacBookPro9,1",
+    "board_id": "Mac-4B7AC7E43945597E",
+    "firmware_vendor": "Apple",
+    "cpu": {
+      "name": "Intel(R) Core(TM) i7-3615QM CPU @ 2.30GHz",
+      "flags": [
+        "FPU",
+        "VME",
+        "DE",
+        "PSE",
+        "TSC",
+        "MSR",
+        "PAE",
+        "MCE",
+        "CX8",
+        "APIC",
+        "SEP",
+        "MTRR",
+        "PGE",
+        "MCA",
+        "CMOV",
+        "PAT",
+        "PSE36",
+        "CLFSH",
+        "DS",
+        "ACPI",
+        "MMX",
+        "FXSR",
+        "SSE",
+        "SSE2",
+        "SS",
+        "HTT",
+        "TM",
+        "PBE",
+        "SSE3",
+        "PCLMULQDQ",
+        "DTES64",
+        "MON",
+        "DSCPL",
+        "VMX",
+        "EST",
+        "TM2",
+        "SSSE3",
+        "CX16",
+        "TPR",
+        "PDCM",
+        "SSE4.1",
+        "SSE4.2",
+        "x2APIC",
+        "POPCNT",
+        "AES",
+        "PCID",
+        "XSAVE",
+        "OSXSAVE",
+        "TSCTMR",
+        "AVX1.0",
+        "RDRAND",
+        "F16C"
+      ],
+      "leafs": [
+        "RDWRFSGS",
+        "SMEP",
+        "ERMS",
+        "MDCLEAR",
+        "IBRS",
+        "STIBP",
+        "L1DF",
+        "SSBD"
+      ]
+    },
+    "pci": [
+      {
+        "vendor_id": "0x8086",
+        "device_id": "0x0154",
+        "class_code": "0x060000",
+        "name": "MCHC",
+        "acpi_path": "IOACPIPlane:/_SB/PCI0@0/MCHC@0"
+      },
+      {
+        "vendor_id": "0x8086",
+        "device_id": "0x0151",
+        "class_code": "0x060400",
+        "name": "P0P2",
+        "acpi_path": "IOACPIPlane:/_SB/PCI0@0/P0P2@10000"
+      },
+      {
+        "vendor_id": "0x10de",
+        "device_id": "0x0fd5",
+        "class_code": "0x030000",
+        "name": "GFX0",
+        "model": "NVIDIA GeForce GT 650M",
+        "acpi_path": "IOACPIPlane:/_SB/PCI0@0/P0P2@10000/GFX0@0"
+      },
+      {
+        "vendor_id": "0x10de",
+        "device_id": "0x0e1b",
+        "class_code": "0x040300",
+        "name": "HDAU",
+        "acpi_path": "IOACPIPlane:/_SB/PCI0@0/P0P2@10000/HDAU@1"
+      },
+      {
+        "vendor_id": "0x8086",
+        "device_id": "0x0155",
+        "class_code": "0x060400",
+        "name": "PEG1",
+        "acpi_path": "IOACPIPlane:/_SB/PCI0@0/PEG1@10001"
+      },
+      {
+        "vendor_id": "0x8086",
+        "device_id": "0x1513",
+        "class_code": "0x060400",
+        "name": "UPSB",
+        "acpi_path": "IOACPIPlane:/_SB/PCI0@0/PEG1@10001/UPSB@0"
+      },
+      {
+        "vendor_id": "0x8086",
+        "device_id": "0x1513",
+        "class_code": "0x060400",
+        "name": "DSB0",
+        "acpi_path": "IOACPIPlane:/_SB/PCI0@0/PEG1@10001/UPSB@0/DSB0@0"
+      },
+      {
+        "vendor_id": "0x8086",
+        "device_id": "0x1513",
+        "class_code": "0x088000",
+        "name": "NHI0",
+        "acpi_path": "IOACPIPlane:/_SB/PCI0@0/PEG1@10001/UPSB@0/DSB0@0/NHI0@0"
+      },
+      {
+        "vendor_id": "0x8086",
+        "device_id": "0x1513",
+        "class_code": "0x060400",
+        "name": "DSB1",
+        "acpi_path": "IOACPIPlane:/_SB/PCI0@0/PEG1@10001/UPSB@0/DSB1@30000"
+      },
+      {
+        "vendor_id": "0x8086",
+        "device_id": "0x1513",
+        "class_code": "0x060400",
+        "name": "DSB2",
+        "acpi_path": "IOACPIPlane:/_SB/PCI0@0/PEG1@10001/UPSB@0/DSB2@40000"
+      },
+      {
+        "vendor_id": "0x8086",
+        "device_id": "0x1513",
+        "class_code": "0x060400",
+        "name": "DSB3",
+        "acpi_path": "IOACPIPlane:/_SB/PCI0@0/PEG1@10001/UPSB@0/DSB3@50000"
+      },
+      {
+        "vendor_id": "0x8086",
+        "device_id": "0x1513",
+        "class_code": "0x060400",
+        "name": "DSB4",
+        "acpi_path": "IOACPIPlane:/_SB/PCI0@0/PEG1@10001/UPSB@0/DSB4@60000"
+      },
+      {
+        "vendor_id": "0x8086",
+        "device_id": "0x0166",
+        "class_code": "0x030000",
+        "name": "IGPU",
+        "model": "Intel HD Graphics 4000",
+        "acpi_path": "IOACPIPlane:/_SB/PCI0@0/IGPU@20000"
+      },
+      {
+        "vendor_id": "0x8086",
+        "device_id": "0x1e31",
+        "class_code": "0x0c0330",
+        "name": "XHC1",
+        "acpi_path": "IOACPIPlane:/_SB/PCI0@0/XHC1@140000"
+      },
+      {
+        "vendor_id": "0x8086",
+        "device_id": "0x1e3a",
+        "class_code": "0x078000",
+        "name": "pci8086,1e3a"
+      },
+      {
+        "vendor_id": "0x8086",
+        "device_id": "0x1e2d",
+        "class_code": "0x0c0320",
+        "name": "EHC2",
+        "acpi_path": "IOACPIPlane:/_SB/PCI0@0/EHC2@1a0000"
+      },
+      {
+        "vendor_id": "0x8086",
+        "device_id": "0x1e20",
+        "class_code": "0x040300",
+        "name": "HDEF",
+        "acpi_path": "IOACPIPlane:/_SB/PCI0@0/HDEF@1b0000"
+      },
+      {
+        "vendor_id": "0x8086",
+        "device_id": "0x1e10",
+        "class_code": "0x060400",
+        "name": "RP01",
+        "acpi_path": "IOACPIPlane:/_SB/PCI0@0/RP01@1c0000"
+      },
+      {
+        "vendor_id": "0x14e4",
+        "device_id": "0x16b4",
+        "class_code": "0x020000",
+        "name": "GIGE",
+        "model": "Broadcom 57765-B0",
+        "acpi_path": "IOACPIPlane:/_SB/PCI0@0/RP01@1c0000/GIGE@0"
+      },
+      {
+        "vendor_id": "0x14e4",
+        "device_id": "0x16bc",
+        "class_code": "0x080501",
+        "name": "SDXC",
+        "acpi_path": "IOACPIPlane:/_SB/PCI0@0/RP01@1c0000/SDXC@1"
+      },
+      {
+        "vendor_id": "0x8086",
+        "device_id": "0x1e12",
+        "class_code": "0x060400",
+        "name": "RP02",
+        "acpi_path": "IOACPIPlane:/_SB/PCI0@0/RP02@1c0001"
+      },
+      {
+        "vendor_id": "0x14e4",
+        "device_id": "0x43ba",
+        "class_code": "0x028000",
+        "name": "ARPT",
+        "acpi_path": "IOACPIPlane:/_SB/PCI0@0/RP02@1c0001/ARPT@0"
+      },
+      {
+        "vendor_id": "0x8086",
+        "device_id": "0x1e14",
+        "class_code": "0x060400",
+        "name": "RP03",
+        "acpi_path": "IOACPIPlane:/_SB/PCI0@0/RP03@1c0002"
+      },
+      {
+        "vendor_id": "0x11c1",
+        "device_id": "0x5901",
+        "class_code": "0x0c0010",
+        "name": "FRWR",
+        "acpi_path": "IOACPIPlane:/_SB/PCI0@0/RP03@1c0002/FRWR@0"
+      },
+      {
+        "vendor_id": "0x8086",
+        "device_id": "0x1e26",
+        "class_code": "0x0c0320",
+        "name": "EHC1",
+        "acpi_path": "IOACPIPlane:/_SB/PCI0@0/EHC1@1d0000"
+      },
+      {
+        "vendor_id": "0x8086",
+        "device_id": "0x1e57",
+        "class_code": "0x060100",
+        "name": "LPCB",
+        "acpi_path": "IOACPIPlane:/_SB/PCI0@0/LPCB@1f0000"
+      },
+      {
+        "vendor_id": "0x8086",
+        "device_id": "0x1e03",
+        "class_code": "0x010601",
+        "name": "SATA",
+        "acpi_path": "IOACPIPlane:/_SB/PCI0@0/SATA@1f0002"
+      },
+      {
+        "vendor_id": "0x8086",
+        "device_id": "0x1e22",
+        "class_code": "0x0c0500",
+        "name": "SBUS",
+        "acpi_path": "IOACPIPlane:/_SB/PCI0@0/SBUS@1f0003"
+      }
+    ],
+    "oclp_patch_sets_record": [
+      "Metal 3802 Common",
+      "Metal 3802 .metallibs Tahoe",
+      "Big Sur GVA",
+      "Monterey OpenCL",
+      "Big Sur OpenCL",
+      "Tahoe Graphics",
+      "Intel Ivy Bridge",
+      "Nvidia Kepler",
+      "Modern Wireless Common",
+      "Modern Audio"
+    ]
+  },
+  "efi_build": {
+    "source": "pinned OCLP source and payloads; no installed OCLP application",
+    "settings": {
+      "sip_status": false,
+      "secure_status": false,
+      "serial_settings": "None",
+      "opencore_debug": false,
+      "showpicker": false,
+      "oc_timeout": 0,
+      "disable_mediaanalysisd": true,
+      "boot_efi": false
+    },
+    "wireless_override": {
+      "vendor_id": "0x14e4",
+      "device_id": "0x43ba",
+      "oclp_chipset": "AirportBrcmNIC"
+    }
+  },
+  "local_port": {
+    "schema": "hao-mbp91-step2-v1",
+    "status": "hardware-map prepared; boot unvalidated",
+    "upstream_commit": "6bd75aab112d1078acd8e75180eb510672461365",
+    "hardware_inventory": {
+      "gpu": [
+        {
+          "vendor": "10de",
+          "device": "0fd5",
+          "class": "0300",
+          "role": "gpu",
+          "name": "NVIDIA GeForce GT 650M"
+        },
+        {
+          "vendor": "8086",
+          "device": "0166",
+          "class": "0300",
+          "role": "gpu",
+          "name": "Intel HD Graphics 4000"
+        }
+      ],
+      "wifi": [
+        {
+          "vendor": "14e4",
+          "device": "43ba",
+          "class": "0280",
+          "role": "wifi",
+          "name": "Broadcom BCM43602"
+        }
+      ],
+      "audio": [
+        {
+          "vendor": "10de",
+          "device": "0e1b",
+          "class": "0403",
+          "role": "audio",
+          "name": "HDAU"
+        },
+        {
+          "vendor": "8086",
+          "device": "1e20",
+          "class": "0403",
+          "role": "audio",
+          "name": "pci8086,1e20"
+        }
+      ],
+      "unknown": [
+        {
+          "role": "gpu",
+          "device": "10de:0fd5",
+          "name": "NVIDIA GeForce GT 650M"
+        },
+        {
+          "role": "audio",
+          "device": "10de:0e1b",
+          "name": "HDAU"
+        },
+        {
+          "role": "wifi",
+          "device": "14e4:43ba",
+          "name": "Broadcom BCM43602"
+        }
+      ]
+    },
+    "pending": [
+      "Golden Gate Darwin 27 compatibility of the additional Kepler/ImageIO/CMPhoto files",
+      "GMUX and dual-GPU boot, switching and sleep/wake acceptance on MacBookPro9,1",
+      "EFI wireless kext selection for the actual BCM43602, not the stock BCM4331",
+      "Remaining Golden Gate/Tahoe/runtime build inputs and target-aware producers",
+      "Full OS image build and actual boot validation"
+    ],
+    "hardware_operations_profile": "tools/oclp-hardware/profiles/mbp91.json"
+  }
+}

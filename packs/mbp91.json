@@ -1,0 +1,15 @@
+{
+  "format": 1,
+  "description": "Local MacBookPro9,1 platform definition; hardware integration and boot validation pending.",
+  "detect": {
+    "board_ids": [
+      "Mac-4B7AC7E43945597E"
+    ]
+  },
+  "oclp_patchsets": [],
+  "phase": "installer",
+  "proven_on": [],
+  "layer": "platform",
+  "kind": "model",
+  "platform": "apple-intel"
+}

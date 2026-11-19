@@ -1,0 +1,444 @@
+{
+  "source_commit": "fd83bda09bdebc6d128287f5c599b5e0d679b8de",
+  "patchset_order": [
+    "Metal 3802 Common",
+    "Metal 3802 .metallibs Tahoe",
+    "Big Sur GVA",
+    "Monterey OpenCL",
+    "Big Sur OpenCL",
+    "Tahoe Graphics",
+    "Intel Ivy Bridge",
+    "Nvidia Kepler",
+    "Modern Wireless Common",
+    "Modern Audio"
+  ],
+  "patches": {
+    "Metal 3802 Common": {
+      "Overwrite System Volume": {
+        "/System/Library/Sandbox/Profiles": {
+          "com.apple.mtlcompilerservice.sb": "12.5-3802"
+        }
+      },
+      "Merge System Volume": {
+        "/System/Library/Frameworks": {
+          "Metal.framework": "13.2.1-25"
+        },
+        "/System/Library/PrivateFrameworks": {
+          "MTLCompiler.framework": "13.6-25",
+          "GPUCompiler.framework": "13.2.1-25"
+        }
+      }
+    },
+    "Metal 3802 .metallibs Tahoe": {
+      "Overwrite System Volume": {
+        "/System/Library/PrivateFrameworks/Tungsten.framework/Versions/A/Resources": {
+          "default.metallib": "26.0-3802"
+        },
+        "/System/Library/PrivateFrameworks/RenderBox.framework/Versions/A/Resources": {
+          "default.metallib": "26.0-3802"
+        },
+        "/System/Library/PrivateFrameworks/VFX.framework/Versions/A/Resources": {
+          "default.metallib": "26.0-3802"
+        },
+        "/System/Library/PrivateFrameworks/VectorKit.framework/Versions/A/Resources": {
+          "default.metallib": "26.0-3802"
+        },
+        "/System/Library/PrivateFrameworks/VectorKit.framework/Versions/A/Resources/metal_libraries": {
+          "AlloyCommonLibrary.metallib": "26.0-3802"
+        }
+      }
+    },
+    "Big Sur GVA": {
+      "Merge System Volume": {
+        "/System/Library/PrivateFrameworks": {
+          "AppleGVA.framework": "11.7.10",
+          "AppleGVACore.framework": "11.7.10"
+        }
+      }
+    },
+    "Monterey OpenCL": {
+      "Merge System Volume": {
+        "/System/Library/Frameworks": {
+          "OpenCL.framework": "12.5"
+        }
+      }
+    },
+    "Big Sur OpenCL": {
+      "Merge System Volume": {
+        "/System/Library/Frameworks": {
+          "OpenCL.framework": "11.6"
+        }
+      }
+    },
+    "Tahoe Graphics": {
+      "Overwrite System Volume": {
+        "/System/Library/PrivateFrameworks/RenderBox.framework/Versions/A/Resources": {
+          "default.metallib": "26.0-3802"
+        }
+      }
+    },
+    "Intel Ivy Bridge": {
+      "Overwrite System Volume": {
+        "/System/Library/Extensions": {
+          "AppleIntelHD4000GraphicsGLDriver.bundle": "11.7.10",
+          "AppleIntelHD4000GraphicsMTLDriver.bundle": "11.7.10",
+          "AppleIntelHD4000GraphicsVADriver.bundle": "11.7.10",
+          "AppleIntelFramebufferCapri.kext": "11.7.10-23.4",
+          "AppleIntelHD4000Graphics.kext": "11.7.10-23.4",
+          "AppleIntelIVBVA.bundle": "11.7.10",
+          "AppleIntelGraphicsShared.bundle": "11.7.10"
+        }
+      }
+    },
+    "Nvidia Kepler": {
+      "Overwrite System Volume": {
+        "/System/Library/Sandbox/Profiles": {
+          "nsattributedstringagent.sb": "26.0-25G229"
+        },
+        "/System/Library/Extensions": {
+          "GeForce.kext": "12.0 Beta 6-23.4",
+          "NVDAGF100Hal.kext": "12.0 Beta 6",
+          "NVDAGK100Hal.kext": "12.0 Beta 6",
+          "NVDAResman.kext": "12.0 Beta 6",
+          "NVDAStartup.kext": "12.0 Beta 6",
+          "GeForceAIRPlugin.bundle": "11.0 Beta 3",
+          "GeForceGLDriver.bundle": "11.0 Beta 3",
+          "GeForceMTLDriver.bundle": "11.0 Beta 3-22",
+          "GeForceVADriver.bundle": "12.0 Beta 6"
+        }
+      },
+      "Merge System Volume": {
+        "/System/Library/Frameworks": {
+          "ImageIO.framework": "26.0-25G229"
+        },
+        "/System/Library/PrivateFrameworks": {
+          "CMPhoto.framework": "26.0-25G229",
+          "GPUCompiler.framework": "13.2.1-25"
+        }
+      }
+    },
+    "Modern Wireless Common": {
+      "Overwrite System Volume": {
+        "/usr/libexec": {
+          "wifip2pd": "13.7.2-25"
+        }
+      },
+      "Merge System Volume": {
+        "/System/Library/PrivateFrameworks": {
+          "IO80211.framework": "13.7.2-25",
+          "WiFiPeerToPeer.framework": "13.7.2-25"
+        }
+      }
+    },
+    "Modern Audio": {
+      "Overwrite System Volume": {
+        "/System/Library/Extensions": {
+          "AppleHDA.kext": "26.0 Beta 1"
+        }
+      }
+    }
+  },
+  "entries": [
+    {
+      "patch": "Metal 3802 Common",
+      "operation": "Overwrite System Volume",
+      "destination": "/System/Library/Sandbox/Profiles/com.apple.mtlcompilerservice.sb",
+      "source_version": "12.5-3802",
+      "support_package_relative_path": "12.5-3802/System/Library/Sandbox/Profiles/com.apple.mtlcompilerservice.sb"
+    },
+    {
+      "patch": "Metal 3802 Common",
+      "operation": "Merge System Volume",
+      "destination": "/System/Library/Frameworks/Metal.framework",
+      "source_version": "13.2.1-25",
+      "support_package_relative_path": "13.2.1-25/System/Library/Frameworks/Metal.framework"
+    },
+    {
+      "patch": "Metal 3802 Common",
+      "operation": "Merge System Volume",
+      "destination": "/System/Library/PrivateFrameworks/MTLCompiler.framework",
+      "source_version": "13.6-25",
+      "support_package_relative_path": "13.6-25/System/Library/PrivateFrameworks/MTLCompiler.framework"
+    },
+    {
+      "patch": "Metal 3802 Common",
+      "operation": "Merge System Volume",
+      "destination": "/System/Library/PrivateFrameworks/GPUCompiler.framework",
+      "source_version": "13.2.1-25",
+      "support_package_relative_path": "13.2.1-25/System/Library/PrivateFrameworks/GPUCompiler.framework"
+    },
+    {
+      "patch": "Metal 3802 .metallibs Tahoe",
+      "operation": "Overwrite System Volume",
+      "destination": "/System/Library/PrivateFrameworks/Tungsten.framework/Versions/A/Resources/default.metallib",
+      "source_version": "26.0-3802",
+      "support_package_relative_path": "26.0-3802/System/Library/PrivateFrameworks/Tungsten.framework/Versions/A/Resources/default.metallib"
+    },
+    {
+      "patch": "Metal 3802 .metallibs Tahoe",
+      "operation": "Overwrite System Volume",
+      "destination": "/System/Library/PrivateFrameworks/RenderBox.framework/Versions/A/Resources/default.metallib",
+      "source_version": "26.0-3802",
+      "support_package_relative_path": "26.0-3802/System/Library/PrivateFrameworks/RenderBox.framework/Versions/A/Resources/default.metallib"
+    },
+    {
+      "patch": "Metal 3802 .metallibs Tahoe",
+      "operation": "Overwrite System Volume",
+      "destination": "/System/Library/PrivateFrameworks/VFX.framework/Versions/A/Resources/default.metallib",
+      "source_version": "26.0-3802",
+      "support_package_relative_path": "26.0-3802/System/Library/PrivateFrameworks/VFX.framework/Versions/A/Resources/default.metallib"
+    },
+    {
+      "patch": "Metal 3802 .metallibs Tahoe",
+      "operation": "Overwrite System Volume",
+      "destination": "/System/Library/PrivateFrameworks/VectorKit.framework/Versions/A/Resources/default.metallib",
+      "source_version": "26.0-3802",
+      "support_package_relative_path": "26.0-3802/System/Library/PrivateFrameworks/VectorKit.framework/Versions/A/Resources/default.metallib"
+    },
+    {
+      "patch": "Metal 3802 .metallibs Tahoe",
+      "operation": "Overwrite System Volume",
+      "destination": "/System/Library/PrivateFrameworks/VectorKit.framework/Versions/A/Resources/metal_libraries/AlloyCommonLibrary.metallib",
+      "source_version": "26.0-3802",
+      "support_package_relative_path": "26.0-3802/System/Library/PrivateFrameworks/VectorKit.framework/Versions/A/Resources/metal_libraries/AlloyCommonLibrary.metallib"
+    },
+    {
+      "patch": "Big Sur GVA",
+      "operation": "Merge System Volume",
+      "destination": "/System/Library/PrivateFrameworks/AppleGVA.framework",
+      "source_version": "11.7.10",
+      "support_package_relative_path": "11.7.10/System/Library/PrivateFrameworks/AppleGVA.framework"
+    },
+    {
+      "patch": "Big Sur GVA",
+      "operation": "Merge System Volume",
+      "destination": "/System/Library/PrivateFrameworks/AppleGVACore.framework",
+      "source_version": "11.7.10",
+      "support_package_relative_path": "11.7.10/System/Library/PrivateFrameworks/AppleGVACore.framework"
+    },
+    {
+      "patch": "Monterey OpenCL",
+      "operation": "Merge System Volume",
+      "destination": "/System/Library/Frameworks/OpenCL.framework",
+      "source_version": "12.5",
+      "support_package_relative_path": "12.5/System/Library/Frameworks/OpenCL.framework"
+    },
+    {
+      "patch": "Big Sur OpenCL",
+      "operation": "Merge System Volume",
+      "destination": "/System/Library/Frameworks/OpenCL.framework",
+      "source_version": "11.6",
+      "support_package_relative_path": "11.6/System/Library/Frameworks/OpenCL.framework"
+    },
+    {
+      "patch": "Tahoe Graphics",
+      "operation": "Overwrite System Volume",
+      "destination": "/System/Library/PrivateFrameworks/RenderBox.framework/Versions/A/Resources/default.metallib",
+      "source_version": "26.0-3802",
+      "support_package_relative_path": "26.0-3802/System/Library/PrivateFrameworks/RenderBox.framework/Versions/A/Resources/default.metallib"
+    },
+    {
+      "patch": "Intel Ivy Bridge",
+      "operation": "Overwrite System Volume",
+      "destination": "/System/Library/Extensions/AppleIntelHD4000GraphicsGLDriver.bundle",
+      "source_version": "11.7.10",
+      "support_package_relative_path": "11.7.10/System/Library/Extensions/AppleIntelHD4000GraphicsGLDriver.bundle"
+    },
+    {
+      "patch": "Intel Ivy Bridge",
+      "operation": "Overwrite System Volume",
+      "destination": "/System/Library/Extensions/AppleIntelHD4000GraphicsMTLDriver.bundle",
+      "source_version": "11.7.10",
+      "support_package_relative_path": "11.7.10/System/Library/Extensions/AppleIntelHD4000GraphicsMTLDriver.bundle"
+    },
+    {
+      "patch": "Intel Ivy Bridge",
+      "operation": "Overwrite System Volume",
+      "destination": "/System/Library/Extensions/AppleIntelHD4000GraphicsVADriver.bundle",
+      "source_version": "11.7.10",
+      "support_package_relative_path": "11.7.10/System/Library/Extensions/AppleIntelHD4000GraphicsVADriver.bundle"
+    },
+    {
+      "patch": "Intel Ivy Bridge",
+      "operation": "Overwrite System Volume",
+      "destination": "/System/Library/Extensions/AppleIntelFramebufferCapri.kext",
+      "source_version": "11.7.10-23.4",
+      "support_package_relative_path": "11.7.10-23.4/System/Library/Extensions/AppleIntelFramebufferCapri.kext"
+    },
+    {
+      "patch": "Intel Ivy Bridge",
+      "operation": "Overwrite System Volume",
+      "destination": "/System/Library/Extensions/AppleIntelHD4000Graphics.kext",
+      "source_version": "11.7.10-23.4",
+      "support_package_relative_path": "11.7.10-23.4/System/Library/Extensions/AppleIntelHD4000Graphics.kext"
+    },
+    {
+      "patch": "Intel Ivy Bridge",
+      "operation": "Overwrite System Volume",
+      "destination": "/System/Library/Extensions/AppleIntelIVBVA.bundle",
+      "source_version": "11.7.10",
+      "support_package_relative_path": "11.7.10/System/Library/Extensions/AppleIntelIVBVA.bundle"
+    },
+    {
+      "patch": "Intel Ivy Bridge",
+      "operation": "Overwrite System Volume",
+      "destination": "/System/Library/Extensions/AppleIntelGraphicsShared.bundle",
+      "source_version": "11.7.10",
+      "support_package_relative_path": "11.7.10/System/Library/Extensions/AppleIntelGraphicsShared.bundle"
+    },
+    {
+      "patch": "Nvidia Kepler",
+      "operation": "Overwrite System Volume",
+      "destination": "/System/Library/Sandbox/Profiles/nsattributedstringagent.sb",
+      "source_version": "26.0-25G229",
+      "support_package_relative_path": "26.0-25G229/System/Library/Sandbox/Profiles/nsattributedstringagent.sb"
+    },
+    {
+      "patch": "Nvidia Kepler",
+      "operation": "Overwrite System Volume",
+      "destination": "/System/Library/Extensions/GeForce.kext",
+      "source_version": "12.0 Beta 6-23.4",
+      "support_package_relative_path": "12.0 Beta 6-23.4/System/Library/Extensions/GeForce.kext"
+    },
+    {
+      "patch": "Nvidia Kepler",
+      "operation": "Overwrite System Volume",
+      "destination": "/System/Library/Extensions/NVDAGF100Hal.kext",
+      "source_version": "12.0 Beta 6",
+      "support_package_relative_path": "12.0 Beta 6/System/Library/Extensions/NVDAGF100Hal.kext"
+    },
+    {
+      "patch": "Nvidia Kepler",
+      "operation": "Overwrite System Volume",
+      "destination": "/System/Library/Extensions/NVDAGK100Hal.kext",
+      "source_version": "12.0 Beta 6",
+      "support_package_relative_path": "12.0 Beta 6/System/Library/Extensions/NVDAGK100Hal.kext"
+    },
+    {
+      "patch": "Nvidia Kepler",
+      "operation": "Overwrite System Volume",
+      "destination": "/System/Library/Extensions/NVDAResman.kext",
+      "source_version": "12.0 Beta 6",
+      "support_package_relative_path": "12.0 Beta 6/System/Library/Extensions/NVDAResman.kext"
+    },
+    {
+      "patch": "Nvidia Kepler",
+      "operation": "Overwrite System Volume",
+      "destination": "/System/Library/Extensions/NVDAStartup.kext",
+      "source_version": "12.0 Beta 6",
+      "support_package_relative_path": "12.0 Beta 6/System/Library/Extensions/NVDAStartup.kext"
+    },
+    {
+      "patch": "Nvidia Kepler",
+      "operation": "Overwrite System Volume",
+      "destination": "/System/Library/Extensions/GeForceAIRPlugin.bundle",
+      "source_version": "11.0 Beta 3",
+      "support_package_relative_path": "11.0 Beta 3/System/Library/Extensions/GeForceAIRPlugin.bundle"
+    },
+    {
+      "patch": "Nvidia Kepler",
+      "operation": "Overwrite System Volume",
+      "destination": "/System/Library/Extensions/GeForceGLDriver.bundle",
+      "source_version": "11.0 Beta 3",
+      "support_package_relative_path": "11.0 Beta 3/System/Library/Extensions/GeForceGLDriver.bundle"
+    },
+    {
+      "patch": "Nvidia Kepler",
+      "operation": "Overwrite System Volume",
+      "destination": "/System/Library/Extensions/GeForceMTLDriver.bundle",
+      "source_version": "11.0 Beta 3-22",
+      "support_package_relative_path": "11.0 Beta 3-22/System/Library/Extensions/GeForceMTLDriver.bundle"
+    },
+    {
+      "patch": "Nvidia Kepler",
+      "operation": "Overwrite System Volume",
+      "destination": "/System/Library/Extensions/GeForceVADriver.bundle",
+      "source_version": "12.0 Beta 6",
+      "support_package_relative_path": "12.0 Beta 6/System/Library/Extensions/GeForceVADriver.bundle"
+    },
+    {
+      "patch": "Nvidia Kepler",
+      "operation": "Merge System Volume",
+      "destination": "/System/Library/Frameworks/ImageIO.framework",
+      "source_version": "26.0-25G229",
+      "support_package_relative_path": "26.0-25G229/System/Library/Frameworks/ImageIO.framework"
+    },
+    {
+      "patch": "Nvidia Kepler",
+      "operation": "Merge System Volume",
+      "destination": "/System/Library/PrivateFrameworks/CMPhoto.framework",
+      "source_version": "26.0-25G229",
+      "support_package_relative_path": "26.0-25G229/System/Library/PrivateFrameworks/CMPhoto.framework"
+    },
+    {
+      "patch": "Nvidia Kepler",
+      "operation": "Merge System Volume",
+      "destination": "/System/Library/PrivateFrameworks/GPUCompiler.framework",
+      "source_version": "13.2.1-25",
+      "support_package_relative_path": "13.2.1-25/System/Library/PrivateFrameworks/GPUCompiler.framework"
+    },
+    {
+      "patch": "Modern Wireless Common",
+      "operation": "Overwrite System Volume",
+      "destination": "/usr/libexec/wifip2pd",
+      "source_version": "13.7.2-25",
+      "support_package_relative_path": "13.7.2-25/usr/libexec/wifip2pd"
+    },
+    {
+      "patch": "Modern Wireless Common",
+      "operation": "Merge System Volume",
+      "destination": "/System/Library/PrivateFrameworks/IO80211.framework",
+      "source_version": "13.7.2-25",
+      "support_package_relative_path": "13.7.2-25/System/Library/PrivateFrameworks/IO80211.framework"
+    },
+    {
+      "patch": "Modern Wireless Common",
+      "operation": "Merge System Volume",
+      "destination": "/System/Library/PrivateFrameworks/WiFiPeerToPeer.framework",
+      "source_version": "13.7.2-25",
+      "support_package_relative_path": "13.7.2-25/System/Library/PrivateFrameworks/WiFiPeerToPeer.framework"
+    },
+    {
+      "patch": "Modern Audio",
+      "operation": "Overwrite System Volume",
+      "destination": "/System/Library/Extensions/AppleHDA.kext",
+      "source_version": "26.0 Beta 1",
+      "support_package_relative_path": "26.0 Beta 1/System/Library/Extensions/AppleHDA.kext"
+    }
+  ],
+  "schema": 1,
+  "name": "mbp91-legacy-hardware-darwin25-local-v1",
+  "model": "MacBookPro9,1",
+  "donor_policy": {
+    "darwin_major": 25,
+    "darwin_minor": 6,
+    "build": "25G332",
+    "role": "legacy Intel hardware ABI selection; never the target OS identity"
+  },
+  "target_darwin_major": 27,
+  "psp_version": "2.0.5",
+  "oclp_version": "3.0.0-rc.5",
+  "psp_sha256": "1c290781bc726759ff37a110ffcb7182a6c6fd3d8ebce112d134d482c8de52a3",
+  "local_port": {
+    "schema": "hao-mbp91-step3-v1",
+    "upstream_hao_commit": "6bd75aab112d1078acd8e75180eb510672461365",
+    "upstream_oclp_commit": "e2107e05d9ce574e9ac3fd8b223e20a2edb7ba53",
+    "provenance": "Reviewed local derivation from Hao mbp92 and pinned OCLP source; NOT full OCLP autodetection",
+    "reference_profile_git_blob": "d508e3bd85a31bf253b0be89e4930ffa12c5720e",
+    "intended_os_build": "26B131",
+    "intended_donor_build": "25G342",
+    "nvidia_source": "opencore_legacy_patcher/sys_patch/patchsets/hardware/graphics/nvidia_kepler.py@e2107e05d9ce574e9ac3fd8b223e20a2edb7ba53",
+    "wireless_source": "opencore_legacy_patcher/sys_patch/patchsets/hardware/networking/modern_wireless.py@e2107e05d9ce574e9ac3fd8b223e20a2edb7ba53",
+    "nvidia_source_git_blob": "c5383e49cbc0e4ec9f8ffe55ea31cecc16280966",
+    "wireless_source_git_blob": "7493b7587746a5f3a5b9240c6c90c45504d2862e",
+    "wireless_scope": "Modern Wireless Common userspace only; EFI kext selection remains separate",
+    "boot_validated": false,
+    "pending": [
+      "Golden Gate Darwin 27 compatibility of the additional Kepler/ImageIO/CMPhoto files",
+      "GMUX and dual-GPU boot, switching and sleep/wake acceptance on MacBookPro9,1",
+      "EFI wireless kext selection for the actual BCM43602, not the stock BCM4331",
+      "Remaining Golden Gate/Tahoe/runtime build inputs and target-aware producers",
+      "Full OS image build and actual boot validation"
+    ]
+  }
+}
