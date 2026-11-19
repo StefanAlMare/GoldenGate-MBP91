@@ -53,7 +53,11 @@ The stock Apple 26B131 system and the assembled image contained byte-identical c
 
 On the running MacBook, the shared Romanian store contained 243 nonempty units. The local Setup Assistant account already had an index for 26B131 and Romanian. All 456 records referred to units present on this same installation, covering 228 distinct units. The system account also held a smaller matching index. The repair installed the Setup account's index at the previously missing path in the desktop user's cache, then relaunched that user's IconServices agent. The 720,896-byte index remained present immediately after relaunch. The shared store and the Tahoe volume were untouched.
 
-Installation is verified. The next acceptance checks are the appearance of the Tahoe drive icon and the responsiveness of the Finder View menu. Whether the earlier XPC errors persist after installing the index is still open.
+StefanAlMare saw no visual improvement before reboot. After the 16:29 reboot, the desktop user's index still had the same size, owner, mode and SHA-256 (`fe6be8430620640f462def2224a9738b8965be2229dfe05179bad69d22ca68c0`). The 15-second check recorded 6,197 listener rejection events, 6,193 image-generation errors and zero index-open errors. Its filtered filesystem trace returned no matching accesses, so it could not establish whether either process read the index during the check.
+
+An earlier Finder sample shows 58 of 65 samples on the icon cache-miss queue waiting for a synchronous XPC reply. The user agent sampled a connection from Finder's PID and a cancellation on its IconServices listener. These observations explain delays in icon requests. The reason the listener cancels the connection and the cause of the missing menu-bar symbols are still open.
+
+In the assembled image on the iMac, Finder, iconservicesagent and iconservicesd matched their build manifest. The four Finder and IconServices launch plists matched Apple's 26B131 image byte for byte. The [read-only comparison](diagnostics/GoldenGate-Finder-XPC.command) checks the running installation against those seven files, inspects the registered services and reads the published messages around the failure.
 
 ## Open observations and next tests
 

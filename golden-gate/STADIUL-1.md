@@ -51,7 +51,11 @@ Sistemul Apple 26B131 și imaginea construită conțineau copii identice, octet 
 
 Pe MacBook-ul pornit, depozitul comun pentru limba română conținea 243 de fișiere de pictograme cu date. Contul folosit de Setup Assistant avea deja un index pentru buildul 26B131 și limba română. Toate cele 456 de înregistrări făceau trimitere la fișiere existente pe această instalare, 228 de fișiere distincte. Contul de sistem avea și el un index compatibil, mai mic. Reparația a instalat indexul de la Setup în cache-ul contului grafic, în locul unde lipsea, apoi a relansat agentul de pictograme al acelui cont. După relansare, indexul de 720.896 de octeți era încă prezent. Depozitul comun și volumul Tahoe au rămas intacte.
 
-Instalarea este confirmată. Rămân de verificat aspectul pictogramei discului Tahoe, timpul de răspuns al meniului Vizualizare din Finder și persistența erorilor XPC.
+StefanAlMare nu a observat o îmbunătățire vizuală înainte de repornire. După repornirea de la 16:29, indexul contului a păstrat dimensiunea, proprietarul, permisiunile și amprenta SHA-256 (`fe6be8430620640f462def2224a9738b8965be2229dfe05179bad69d22ca68c0`). În 15 secunde s-au înregistrat 6.197 de evenimente de refuz al conexiunii, 6.193 de erori la generarea imaginilor și zero erori de deschidere a indexului. Urmărirea acceselor la fișiere nu a găsit în acel interval o citire a indexului de către procesele urmărite.
+
+Într-o captură anterioară, în 58 din 65 de eșantioane ale cozii pentru pictograme absente din cache, Finder aștepta un răspuns XPC sincron. La agentul contului s-au observat o conexiune asociată PID-ului Finder și o anulare în serviciul care primește cererile IconServices. Aceste observații explică întârzierile cererilor de pictograme. Motivul anulării și cauza simbolurilor invizibile din bara de meniu rămân de stabilit.
+
+În imaginea asamblată pe iMac, Finder, iconservicesagent și iconservicesd corespund manifestului de construcție. Cele patru configurații de lansare pentru Finder și IconServices coincid octet cu octet cu cele din imaginea Apple 26B131. [Verificarea în regim de citire](diagnostics/GoldenGate-Finder-XPC.command) compară cele șapte fișiere de pe SSD-ul pornit cu aceste repere, consultă serviciile înregistrate și citește mesajele disponibile din momentul erorii.
 
 ## Următoarea probă pe copia externă
 

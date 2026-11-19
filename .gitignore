@@ -33,6 +33,7 @@ build/
 *.car
 *.aot
 *.logarchive/
+/golden-gate/diagnostics/GoldenGate-Finder-XPC-Report.*
 *.trace/
 *.sqlite
 dyld_shared_cache_*
