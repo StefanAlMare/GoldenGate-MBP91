@@ -57,7 +57,15 @@ StefanAlMare saw no visual improvement before reboot. After the 16:29 reboot, th
 
 An earlier Finder sample shows 58 of 65 samples on the icon cache-miss queue waiting for a synchronous XPC reply. The user agent sampled a connection from Finder's PID and a cancellation on its IconServices listener. These observations explain delays in icon requests. The reason the listener cancels the connection and the cause of the missing menu-bar symbols are still open.
 
-In the assembled image on the iMac, Finder, iconservicesagent and iconservicesd matched their build manifest. The four Finder and IconServices launch plists matched Apple's 26B131 image byte for byte. The [read-only comparison](diagnostics/GoldenGate-Finder-XPC.command) checks the running installation against those seven files, inspects the registered services and reads the published messages around the failure.
+The [read-only comparison](diagnostics/GoldenGate-Finder-XPC.command) on the booted external SSD confirmed all seven reference hashes. Finder, iconservicesagent and iconservicesd match the assembly manifest, and the four launch plists match the Apple 26B131 files. The daemon's AOT check also passed. Both agents and the store daemon had each launched once and were running.
+
+From 16:33:21 to 16:33:59 EET, the user agent logged 14,032 listener rejections and Finder logged 14,016 image generation failures with Foundation error 4097. In a separate eight seconds without opening a window, the same agent logged 12,110 rejections. The visible records in that second interval did not identify the client. Neither interval disclosed a more specific reason for the rejection.
+
+### Runtime comparison on a second external copy
+
+The [builder used on this Mac](https://github.com/lythka/hao-patcher/blob/6bd75aab112d1078acd8e75180eb510672461365/pipeline/inputs/golden/26B131/hao_runtime) pins the complete `1547dcb-A` payload to SHA-256 `89aa3ccc61ae20c2ef1eac221413e980701e612e3fe2d837535da7164b534e09` under its directory hashing rules, excluding locally generated AOT files. Both builds target cache family A (`262FA161`). The upstream libhao hash begins with `c7a162e2`; the local library begins with `11760e88`. The local build record confirms that external interface units, thunk libraries and the optional async provider were omitted. The [author's validation notes](https://github.com/lythka/hao-patcher/blob/6bd75aab112d1078acd8e75180eb510672461365/patches/hao-runtime/README.md#L43-L55) identify an earlier runtime on the tested laptop and mark this particular package as awaiting a laptop run.
+
+The complete reference package was unavailable in the project files and archives checked on the iMac and in the upstream GitHub releases and Actions artifacts checked on 19 November. If it becomes available, compare the full verified payload on a second external copy, keeping the current bootable SSD as the control. Use the same account and volume to check the drive icon, the time until Finder's View menu responds, and the XPC errors during that operation. Missing menu-bar symbols require their own visual check. The runtime difference remains a hypothesis until this comparison is made.
 
 ## Open observations and next tests
 
