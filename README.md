@@ -19,6 +19,22 @@
 > [!IMPORTANT]
 > **A working desktop, not yet a finished distribution.** On **19 November 2026**, Golden Gate 27.2.1 (26B131) reached Setup Assistant, account creation and the desktop on a real **15-inch Mid 2012 MacBook Pro**, booting from an external USB SSD. Restart and sign-in were subsequently confirmed. On **20 November**, a second image received focused repairs verified on the laptop. **Stage 1 is complete; the project remains experimental.**
 
+<!-- MBP91-PHOTO-SECTION-START -->
+## Photographs — Golden Gate on the actual MacBookPro9,1
+
+Real screenshots from **20 November 2026**, taken on the 15-inch MacBookPro9,1—not from the upstream MacBookPro9,2.
+
+<table>
+<tr>
+<td width="50%" align="center" valign="top"><a href="golden-gate/images/mbp91/01-golden-gate-desktop-h264.webp"><img src="golden-gate/images/mbp91/01-golden-gate-desktop-h264.webp" width="100%" alt="Golden Gate 27.2.1 desktop on MacBookPro9,1" /></a><br /><strong>Golden Gate 27.2.1: a real, running desktop</strong><br /><sub>macOS 27.2.1 (26B131) · MacBookPro9,1</sub></td>
+<td width="50%" align="center" valign="top"><a href="golden-gate/images/mbp91/10-nvidia-gt650m-dual-display.webp"><img src="golden-gate/images/mbp91/10-nvidia-gt650m-dual-display.webp" width="100%" alt="NVIDIA GT 650M driving internal and external screens" /></a><br /><strong>GT 650M: both screens on NVIDIA</strong><br /><sub>Internal 1680×1050 + external 1920×1080 display</sub></td>
+</tr>
+</table>
+
+**[View all 10 hardware screenshots →](golden-gate/GALLERY.md)** (Intel, NVIDIA, GMUX, Wi-Fi, Bluetooth, Ethernet, Thunderbolt 2, audio, storage and camera).
+
+<!-- MBP91-PHOTO-SECTION-END -->
+
 ## The vision
 
 **What if the breakthrough that brought macOS Golden Gate to the 13-inch 2012 MacBook Pro could be extended to its more complex 15-inch sibling?**

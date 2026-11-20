@@ -19,6 +19,22 @@
 > [!IMPORTANT]
 > **Un desktop funcțional, dar nu încă o distribuție finalizată.** Pe **19 noiembrie 2026**, macOS Golden Gate 27.2.1 (26B131) a ajuns la Setup Assistant, configurarea contului și desktop pe un **MacBook Pro real de 15″, Mid 2012**, pornind de pe SSD USB extern. Autentificarea a reușit și după restart. Pe **20 noiembrie**, a doua imagine a primit reparații verificate pe laptop. **Etapa 1 este încheiată; proiectul rămâne experimental.**
 
+<!-- MBP91-PHOTO-SECTION-START -->
+## Fotografii — Golden Gate pe MacBookPro9,1 real
+
+Capturi autentice din **20 noiembrie 2026**, de pe modelul de 15″ MacBookPro9,1, nu de pe MacBookPro9,2 al autorului.
+
+<table>
+<tr>
+<td width="50%" align="center" valign="top"><a href="golden-gate/images/mbp91/01-golden-gate-desktop-h264.webp"><img src="golden-gate/images/mbp91/01-golden-gate-desktop-h264.webp" width="100%" alt="Desktop Golden Gate 27.2.1 pe MacBookPro9,1" /></a><br /><strong>Golden Gate 27.2.1: desktop funcțional</strong><br /><sub>macOS 27.2.1 (26B131) · MacBookPro9,1</sub></td>
+<td width="50%" align="center" valign="top"><a href="golden-gate/images/mbp91/10-nvidia-gt650m-dual-display.webp"><img src="golden-gate/images/mbp91/10-nvidia-gt650m-dual-display.webp" width="100%" alt="NVIDIA GT 650M controlează ecranul intern și extern" /></a><br /><strong>GT 650M: ambele monitoare pe NVIDIA</strong><br /><sub>Ecran intern 1680×1050 + extern 1920×1080</sub></td>
+</tr>
+</table>
+
+**[Vezi toate cele 10 capturi hardware →](golden-gate/GALLERY.md)** (Intel, NVIDIA, GMUX, Wi-Fi, Bluetooth, Ethernet, Thunderbolt 2, audio, stocare și cameră).
+
+<!-- MBP91-PHOTO-SECTION-END -->
+
 ## Viziunea
 
 **Dacă autorul HAO a demonstrat că Golden Gate poate porni pe MacBook Pro-ul de 13″ din 2012, putem extinde soluția la versiunea de 15″, cu o arhitectură grafică mai complexă?**
