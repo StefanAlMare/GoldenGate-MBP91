@@ -1,0 +1,23 @@
+{
+  "revision": 2,
+  "pack": "mbp91",
+  "stage": "oclp-hook",
+  "inputs": ["mbp91_desktop"],
+  "status": "experiment",
+  "validated": false,
+  "requires": {"os": ["26B131"], "donor": ["25G342"], "cpu": "any", "gpu": ["intel-ivb"], "firmware": "any"},
+  "files": [
+    {
+      "path": "System/Library/CoreServices/iconservicesagent",
+      "origin": {"kind": "tahoe", "row": "mbp91_desktop", "note": "Unmodified Apple-signed agent from the 25G422 System volume tested on MacBookPro9,1"},
+      "source": "root/System/Library/CoreServices/iconservicesagent",
+      "install": {"mode": "0755", "owner": "root:wheel", "flags": ["restricted"]}
+    },
+    {
+      "path": "usr/lib/hao/if/21acabfab6cc3ec9a3cf6d4d6b637f5a",
+      "origin": {"kind": "hao", "row": "mbp91_desktop", "note": "SkyLight 26B131 Intel return width for CGS/SLS InputButtonState and InputModifierKeyState"},
+      "source": "root/usr/lib/hao/if/21acabfab6cc3ec9a3cf6d4d6b637f5a",
+      "install": {"mode": "0644", "owner": "root:wheel", "flags": []}
+    }
+  ]
+}
