@@ -27,6 +27,32 @@ The probe runs on the target (an HD 4000 Mac), not on the build host. Routes:
 selects 1 or 4 samples. Output directories must be new. Pixel, pipeline or command
 failures exit nonzero.
 
+### MacBookPro9,1 device selection
+
+The offscreen probe accepts `FB_PROBE_DEVICE=intel` for the HD 4000 and
+`FB_PROBE_DEVICE=nvidia` for the GeForce GT 650M. It records the device name,
+Metal registry ID and Objective-C class. With no selector it uses the default
+device. An explicit selection fails if that device is unavailable.
+
+With a bundle built from this revision, run the original shader and the
+experimental adapter in separate probe processes. Each invocation needs a new
+output directory. The last argument restricts the matrix to single-sample
+render targets.
+
+```sh
+FB_PROBE_DEVICE=intel NEW_BUNDLE/probe NEW_BUNDLE/probe.metallib INTEL_RESULTS native 1
+FB_PROBE_DEVICE=nvidia NEW_BUNDLE/probe NEW_BUNDLE/probe.metallib NVIDIA_RESULTS native 1
+FB_PROBE_DEVICE=nvidia FB_PROBE_KEPLER_ADAPTER=1 NEW_BUNDLE/probe NEW_BUNDLE/probe.metallib NVIDIA_ADAPTER_RESULTS native 1
+```
+
+The last invocation loads the probe's sibling `encoder.dylib` and installs the
+pipeline and encoder hooks on the concrete class of the selected device. Use
+it with `METAL_FRAMEBUFFER_PROBE` unset. The installed system adapter retains
+its original Intel driver entry point. A pass requires the expected pixels
+from the original shader, including overlapping draws. Results from an
+already lowered shader with a separate source texture measure a different
+part of this path. A Finder window requires its own validation on hardware.
+
 Process-local probe controls:
 
 - `FB_PROBE_FACTORY=async`, `FB_PROBE_UNRETAINED=1`, `FB_PROBE_PARALLEL=1`: asynchronous

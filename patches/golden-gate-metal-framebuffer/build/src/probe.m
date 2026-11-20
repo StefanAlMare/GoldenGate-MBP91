@@ -1,6 +1,8 @@
 #import <Foundation/Foundation.h>
 #import <Metal/Metal.h>
 #import <objc/runtime.h>
+#include <dlfcn.h>
+#include <mach-o/dyld.h>
 #include <math.h>
 #include <sys/sysctl.h>
 
@@ -11,6 +13,47 @@ static NSString *sysString(const char *key) {
     char value[256] = {0}; size_t size = sizeof(value);
     return sysctlbyname(key, value, &size, NULL, 0) ? @"unknown" : @(value);
 }
+static id<MTLDevice> probeDevice(void) {
+    const char *choice = getenv("FB_PROBE_DEVICE");
+    if (!choice) return MTLCreateSystemDefaultDevice();
+    if (getenv("METAL_FRAMEBUFFER_PROBE")) {
+        fprintf(stderr, "Explicit device selection requires the default-device probe hook to be unset\n");
+        return nil;
+    }
+    NSString *name = @{@"intel": @"Intel HD Graphics 4000",
+                       @"nvidia": @"NVIDIA GeForce GT 650M"}[@(choice)];
+    if (!name) {
+        fprintf(stderr, "FB_PROBE_DEVICE must be intel or nvidia\n");
+        return nil;
+    }
+    for (id<MTLDevice> device in MTLCopyAllDevices())
+        if ([device.name isEqualToString:name]) return device;
+    fprintf(stderr, "Requested device not present: %s\n", name.UTF8String);
+    return nil;
+}
+
+static BOOL enableKeplerProbeAdapter(id<MTLDevice> device) {
+    if (getenv("METAL_FRAMEBUFFER_PROBE") || ![device.name isEqualToString:@"NVIDIA GeForce GT 650M"]) {
+        fprintf(stderr, "Kepler trial requires the GT 650M and no default-device probe hook\n");
+        return NO;
+    }
+    uint32_t size = 0;
+    _NSGetExecutablePath(NULL, &size);
+    if (!size) return NO;
+    NSMutableData *storage = [NSMutableData dataWithLength:size];
+    if (_NSGetExecutablePath(storage.mutableBytes, &size)) return NO;
+    NSURL *executable = [NSURL fileURLWithFileSystemRepresentation:storage.bytes
+                                                       isDirectory:NO relativeToURL:nil].URLByResolvingSymlinksInPath;
+    NSURL *library = [executable.URLByDeletingLastPathComponent URLByAppendingPathComponent:@"encoder.dylib"];
+    if (!library) { fprintf(stderr, "Cannot locate the probe executable\n"); return NO; }
+    void *handle = dlopen(library.fileSystemRepresentation, RTLD_NOW | RTLD_LOCAL);
+    if (!handle) { fprintf(stderr, "%s\n", dlerror()); return NO; }
+    // Hooks remain in use until process exit; keep the library loaded.
+    BOOL (*install)(id<MTLDevice>) = (BOOL (*)(id<MTLDevice>))dlsym(handle, "FBInstallKeplerProbe");
+    if (!install) { fprintf(stderr, "Missing Kepler probe entry point in encoder.dylib\n"); return NO; }
+    return install(device);
+}
+
 static id<MTLRenderPipelineState> pipeline(id<MTLDevice> d, id<MTLLibrary> lib,
         NSString *fragment, NSUInteger attachment, MTLPixelFormat format, NSUInteger samples,
         MTLRenderPipelineReflection **reflection) {
@@ -233,8 +276,14 @@ int main(int argc, const char **argv) { @autoreleasepool {
     if (![[NSFileManager defaultManager] createDirectoryAtPath:output withIntermediateDirectories:NO attributes:nil error:&error]) {
         fprintf(stderr, "%s\n", error.description.UTF8String); return 2;
     }
-    id<MTLDevice> d = MTLCreateSystemDefaultDevice();
+    id<MTLDevice> d = probeDevice();
     if (!d) return 2;
+    const char *adapterOption = getenv("FB_PROBE_KEPLER_ADAPTER");
+    if (adapterOption && strcmp(adapterOption, "0") && strcmp(adapterOption, "1")) {
+        fprintf(stderr, "FB_PROBE_KEPLER_ADAPTER must be 0 or 1\n"); return 2;
+    }
+    BOOL keplerAdapter = adapterOption && !strcmp(adapterOption, "1");
+    if (keplerAdapter && !enableKeplerProbeAdapter(d)) return 2;
     id<MTLLibrary> lib;
     if(getenv("FB_PROBE_SOURCE")) {
         NSString *source=[NSString stringWithContentsOfFile:@(argv[1]) encoding:NSUTF8StringEncoding error:&error];
@@ -244,7 +293,8 @@ int main(int argc, const char **argv) { @autoreleasepool {
         lib=source?[d newLibraryWithSource:source options:options error:&error]:nil;
     } else lib = [d newLibraryWithURL:[NSURL fileURLWithPath:@(argv[1])] error:&error];
     if (!lib) { fprintf(stderr, "%s\n", error.description.UTF8String); return 2; }
-    NSDictionary *identity = @{@"device":d.name, @"registry_id":@(d.registryID), @"boot":sysString("kern.bootsessionuuid"),
+    NSDictionary *identity = @{@"device":d.name, @"device_class":NSStringFromClass(object_getClass(d)),
+        @"kepler_probe_adapter":@(keplerAdapter), @"registry_id":@(d.registryID), @"boot":sysString("kern.bootsessionuuid"),
         @"os_build":sysString("kern.osversion"), @"library":@(argv[1]), @"pid":@(getpid())};
     [[NSJSONSerialization dataWithJSONObject:identity options:NSJSONWritingPrettyPrinted error:NULL]
         writeToFile:[output stringByAppendingPathComponent:@"identity.json"] atomically:YES];

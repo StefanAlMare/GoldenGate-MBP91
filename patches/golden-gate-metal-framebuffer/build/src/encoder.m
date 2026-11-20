@@ -344,6 +344,20 @@ static void deviceHooks(Class c) { @synchronized(FBState.class) {
     s=@selector(newCommandQueueWithMaxCommandBufferCount:);p=class_getMethodImplementation(c,s);
     hook(c,s,^id(id device,NSUInteger count) __attribute__((ns_returns_retained)) {id queue=((FBNewQueueCount)p)(device,s,count);if(queue)queueHooks(object_getClass(queue));return queue;});
 }}
+#if !FB_SYSTEM || FB_MBP91_DUAL
+#include "mbp91-device.inc"
+#endif
+
+#if !FB_SYSTEM
+// The offscreen probe selects its device before enabling the adapter. Keep
+// the experiment in that process and leave the installed Intel driver alone.
+BOOL FBInstallKeplerProbe(id<MTLDevice> device) {
+    if (![device.name isEqualToString:@"NVIDIA GeForce GT 650M"]) return NO;
+    return FBInstallMBP91Device(device);
+}
+#endif
+
+#if !FB_MBP91_DUAL
 __attribute__((constructor)) static void install(void) { @autoreleasepool {
 #if FB_SYSTEM
     // Loaded as a dependency of this legacy driver. Do not create a device from
@@ -354,3 +368,4 @@ __attribute__((constructor)) static void install(void) { @autoreleasepool {
     id<MTLDevice> device=MTLCreateSystemDefaultDevice();if(device)deviceHooks(object_getClass(device));
 #endif
 }}
+#endif
