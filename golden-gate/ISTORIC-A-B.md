@@ -64,3 +64,4 @@ Pentru a izola influența bibliotecilor grafice, B a păstrat driverele ambelor 
 | Proba experimentală pentru framebuffer și alegerea GPU-ului | [Sursa și instrucțiunile probei](../patches/golden-gate-metal-framebuffer/build/README.md) |
 | Rezultatele fiecărei intervenții, probele negative și cele 29 de rapoarte identificate prin SHA-256 | [Registrul tehnic B](REGISTRU-TEHNIC-B.md) |
 | Sursele probelor pentru Finder, Dock, ferestre, baterie și volume | [Ghidul probelor și șabloanelor A/B](PROBE-A-B.md) |
+| Construcția inițială, pe pași, cu sursele locale și amprentele rapoartelor | [Indexul etapelor 2–13 și al probelor ulterioare](etape-a/INDEX.md) |

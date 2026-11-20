@@ -1,0 +1,21 @@
+Golden Gate 26B131 pe MacBookPro9,1 — test de automontare NTFS, versiunea 2
+
+Deschide comenzile din folderul GoldenGate-TestNTFS-v2. La pornire, fiecare afișează „GoldenGate-TestNTFS v2”.
+
+Proba verifică dacă prima configurare trece de bara de 60% atunci când Golden Gate omite automontarea partiției NTFS interne de 213.821.423.616 octeți. Instalarea Tahoe rămâne disponibilă pentru verificare și retragere. Testul poate fi retras indiferent de rezultatul pornirii.
+
+1. Pornește în Tahoe pe MacBookPro9,1 cu SSD-ul Golden Gate conectat. Dezarhivează pachetul și deschide Verifica.command. Comanda afișează discul identificat prin UUID, tipul partiției, montarea sa curentă și starea probei. Verificarea citește configurația. Cele trei comenzi pot cere parola de administrator, inclusiv pentru citirea sectorului NTFS atunci când Tahoe nu afișează UUID-ul volumului.
+2. Pentru activarea probei, deschide Activeaza-test.command. La confirmarea „Test activat”, pornește o dată de pe SSD-ul extern. Observatorul de la pasul 17, dacă a fost lăsat instalat, va înregistra și această pornire.
+3. Așteaptă șase minute de la apariția barei sau notează când apare prima fereastră de configurare. Dacă ajungi în Setup, poți continua crearea normală a contului pe Golden Gate și nota dacă apare desktopul.
+4. Revino în Tahoe. Rulează GoldenGate.command DIN PACHETUL DiskImages2 de la pasul 17 pentru a colecta rezultatul. Păstrează arhiva GoldenGate-9_1-DiskImages2-….zip de pe Desktop și precizează ce a arătat ecranul.
+5. Din Tahoe deschide Retrage-test.command pentru a reveni la configurația inițială. Când fstab a fost modificat de altcineva între timp, utilitarul păstrează atât fișierul curent, cât și copia de siguranță și afișează motivul opririi.
+
+Regula din fișierul private/etc/fstab al volumului Data Golden extern este
+
+UUID=00000000-0000-4000-8000-00000000000A none auto ro,noauto 0 0
+
+Ea precedă regulile existente și se aplică UUID-ului de sistem de fișiere. Identificarea separată a partiției GPT folosește 00000000-0000-4000-8000-000000000007, pe un disc fizic intern. Dacă Tahoe afișează alt UUID de volum, activarea se oprește. Dacă îl omite, utilitarul verifică dimensiunea și semnătura NTFS prin citire. Sistemul Golden este identificat separat prin UUID-urile System, Data, container și partiție fizică, plus build. Volumele Golden deja montate sunt reutilizate. Dacă lipsesc, utilitarul montează temporar numai volumele Golden necesare.
+
+Versiunea 2 identifică partiția prin UUID-ul GPT și volumul prin UUID-ul NTFS atunci când Tahoe îl afișează. Valorile TotalSize și VolumeSize nu decid identitatea volumului. Dacă UUID-ul NTFS lipsește, comanda verifică semnătura NTFS și dimensiunea fizică prin Size din lista de partiții, IOKitSize sau geometria citită direct de pe partiție.
+
+Verificare efectuată pe macOS pentru identificare, activare și restaurare, folosind date de test. Efectul asupra primei configurări se stabilește prin pornirea fizică pe 9,1.

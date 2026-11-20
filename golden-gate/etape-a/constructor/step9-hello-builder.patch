@@ -1,0 +1,11 @@
+--- upstream/cache/metallib/lib/build_metallib.py
++++ private-copy/build_metallib.py
+@@ -148,7 +148,7 @@
+         fix = golden_gate
+     if '--legacy-sync-only' in sys.argv:
+         fix = legacy_sync
+-    direct_assembly = fix in (golden_gate, legacy_sync)
++    direct_assembly = fix in (golden_gate, legacy_sync) or '--hello-direct-assembly' in sys.argv
+     identity = '--identity-control' in sys.argv
+     output.mkdir(parents=True)
+     data = source.read_bytes()

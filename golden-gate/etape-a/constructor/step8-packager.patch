@@ -1,0 +1,30 @@
+--- upstream/hao-image-payload
++++ local/hao-image-payload-reuse
+@@ -140,22 +140,17 @@
+     [ -f "$LIST" ] || { echo "hao-image-payload: no list $LIST" >&2; exit 2; }
+     LIST=$(cd "$(dirname "$LIST")" && pwd)/$(basename "$LIST")
+ fi
+-H=$(cd "$(dirname "$0")/.." && pwd)
++H=${HAO_STEP8_SOURCE:?missing verified source directory}
+ [ ! -e "$OUT" ] || { echo "hao-image-payload: $OUT exists" >&2; exit 1; }
+ [ -z "$UNITS" ] || [ -d "$UNITS" ] || { echo "hao-image-payload: no units directory $UNITS" >&2; exit 2; }
+ [ -d "$ROOT" ] || { echo "hao-image-payload: no ROOT $ROOT" >&2; exit 1; }
+-if [ -n "$MIN" ]; then
+-    [[ "$MIN" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]] || { echo "hao-image-payload: bad --macos-min $MIN" >&2; exit 2; }
+-    BDIR=build/macos-$MIN
+-    make -C "$H" B="$BDIR" MACOS_MIN="$MIN" >/dev/null
+-else
+-    BDIR=build
+-    make -C "$H" >/dev/null
+-fi
++# Local wrapper: all these inputs were hash-checked before this process.
++[ "$MIN" = 27.0 ] || { echo "local packager requires --macos-min 27.0" >&2; exit 2; }
++BDIR=${HAO_STEP8_PREBUILT:?missing verified build directory}
+ B=$H/$BDIR
+ KEXT_MIN=13.0
+-"$H/kext/build.sh" "$B" "$KEXT_MIN" >/dev/null
+ KEXT=$B/HaoExec.kext
++[ -f "$B/hao" ] && [ -f "$B/front/stub.o" ] && [ -d "$KEXT" ] || exit 1
+ RELEASE=$(python3 -c 'import plistlib,sys; print(plistlib.load(open(sys.argv[1],"rb"))["ProductVersion"])' \
+           "$ROOT/System/Library/CoreServices/SystemVersion.plist")
+ mkdir -p "$OUT/root/usr/libexec" "$OUT/root/usr/lib/hao/aot" "$OUT/embed"

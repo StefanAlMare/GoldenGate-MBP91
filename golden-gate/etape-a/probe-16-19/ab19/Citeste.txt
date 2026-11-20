@@ -1,0 +1,15 @@
+Golden Gate 26B131 pe MacBookPro9,1 — test cumulativ NTFS + exFAT
+
+În ultima pornire observată, partiția NTFS internă apare închisă, partiția exFAT apare deschisă și prima configurare încă aștepta. Proba adaugă și exFAT la volumele omise de Golden la automontare. Ambele reguli folosesc UUID-urile sistemelor de fișiere.
+
+1. Pornește în Tahoe cu SSD-ul Golden conectat. În folderul GoldenGate-TestNTFS-exFAT deschide Activeaza-test.command. Dacă regula NTFS v2 este deja activă, utilitarul o păstrează și adaugă exFAT. Dacă ai retras v2 sau nu l-ai activat, utilitarul aplică ambele reguli. Pentru o verificare separată poți deschide Verifica.command. Comenzile cer parola de administrator.
+2. După mesajul „Test activat. Ambele reguli sunt prezente” sau „Proba cumulativă este deja activă”, pornește de pe SSD-ul extern Golden. Dacă apare prima fereastră de configurare, notează ce arată și poți continua până la desktop. Dacă rămâne la bară, lasă-l șase minute.
+3. Revino în Tahoe. Deschide Colecteaza.command din acest folder înainte să retragi testul. Trimite arhiva nouă de pe Desktop și precizează ce a apărut pe ecran. Observatorul DiskImages2 de la pasul 17 trebuie să fi fost instalat pe Golden în timpul pornirii pentru a avea o captură nouă.
+4. Când dorești să revii la starea dinaintea acestei probe, deschide Retrage-test.command din acest folder. Dacă v2 era activ atunci când ai început, regula NTFS v2 rămâne activă. Poți retrage ulterior și v2 folosind Retrage-test.command din vechiul folder GoldenGate-TestNTFS-v2. Dacă ai pornit fără v2, retragerea probei cumulative restaurează configurația inițială într-un singur pas.
+
+Activarea și retragerea operează în private/etc pe volumul Data al SSD-ului extern Golden Gate. Utilitarul verifică buildul, UUID-urile Golden și identitatea SSD-ului. Pentru cele două partiții de pe discul intern citește identificatorii și, dacă Tahoe omite metadatele necesare, semnătura sistemului de fișiere și geometria partiției. Regulile sunt:
+
+UUID=00000000-0000-4000-8000-00000000000A none auto ro,noauto 0 0
+UUID=00000000-0000-4000-8000-000000000003 none auto ro,noauto 0 0
+
+Utilitarul refuză o configurație ambiguă sau modificată între timp și afișează motivul. Dacă semnalează o stare NTFS v2 incompletă, deschide Verifica.command din vechiul folder v2 și citește mesajul înainte de a repeta proba cumulativă.
