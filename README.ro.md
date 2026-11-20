@@ -164,9 +164,9 @@ Aceasta este **o intervenție demonstrată pe calculatorul respectiv**, nu un re
 
 ## Galeria foto
 
-Pregătim o galerie cu **fotografii și capturi autentice de pe MacBookPro9,1**: primul desktop, GPU Intel/NVIDIA, comutarea GMUX, monitorul extern, hubul Thunderbolt, probe Metal și rezultatele reparațiilor B.
+**Cele zece capturi autentice de pe MacBookPro9,1 sunt acum publicate.** Galeria documentează desktopul Golden Gate, cele două GPU, configurația cu monitor intern și extern, Wi-Fi, Bluetooth, Ethernet, Thunderbolt, audio, cameră și stocare. Cele două imagini principale sunt afișate mai sus, iar galeria completă permite deschiderea fiecărei capturi și include explicații în engleză și română. Vom putea adăuga fotografii suplimentare cu comutarea grafică la cererea aplicațiilor și reparațiile viitoare.
 
-**[Galeria proiectului — secțiuni pregătite pentru fotografii](golden-gate/GALLERY.md)**
+**[Vezi toate cele 10 capturi autentice](golden-gate/GALLERY.md)**
 
 [Galeria originală HAO](docs/gallery.md) prezintă **MacBookPro9,2** și nu este folosită drept dovadă vizuală pentru 9,1.
 
@@ -180,7 +180,7 @@ Pregătim o galerie cu **fotografii și capturi autentice de pe MacBookPro9,1**:
 | [Registru tehnic B](golden-gate/REGISTRU-TEHNIC-B.md) | Reparații, teste retrase și hash-uri |
 | [Etapele 2–13](golden-gate/etape-a/INDEX.md) | Scripturi istorice și surse de construire |
 | [Kit pentru volume](golden-gate/kit-volume/Citeste.md) | Inventar și probe NTFS/exFAT |
-| [Galeria foto](golden-gate/GALLERY.md) | Locurile rezervate fotografiilor reale |
+| [Galeria foto](golden-gate/GALLERY.md) | Zece capturi autentice MacBookPro9,1, cu explicații bilingve |
 | [Credite și licențe](NOTICE.md) | Atribuiri upstream |
 
 ## Ce urmează

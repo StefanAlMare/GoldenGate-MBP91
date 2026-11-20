@@ -164,9 +164,9 @@ These are **specific engineering tasks**, not reasons to overlook the already wo
 
 ## Visual gallery
 
-We are preparing a dedicated gallery for **authentic photographs and screenshots from this MacBookPro9,1**, including the first desktop, internal/external GPU switching, Photos, the Thunderbolt connection, Metal tests and before/after repairs.
+**Ten authentic screenshots from the MacBookPro9,1 are now published.** The curated collection presents the Golden Gate desktop, both GPUs, the internal/external display configuration, Wi-Fi, Bluetooth, Ethernet, Thunderbolt, audio, camera and storage. The first two highlights are displayed above; the full gallery offers individual full-size views and bilingual captions. Additional photographs of app-triggered switching and future repairs can be added as new tests are documented.
 
-**[Project gallery — photo sections prepared](golden-gate/GALLERY.md)**
+**[View all 10 verified hardware screenshots](golden-gate/GALLERY.md)**
 
 The [original HAO gallery](docs/gallery.md) illustrates the **13-inch MacBookPro9,2** and is not photographic proof of this 15-inch adaptation.
 
@@ -180,7 +180,7 @@ The [original HAO gallery](docs/gallery.md) illustrates the **13-inch MacBookPro
 | [Image B technical ledger](golden-gate/REGISTRU-TEHNIC-B.md) | Repairs, rollback experiments and hashes in Romanian |
 | [Source archive](golden-gate/etape-a/INDEX.md) | Original construction steps and script provenance |
 | [Volume test kit](golden-gate/kit-volume/README.md) | Volume inventory and automount test planning |
-| [Gallery](golden-gate/GALLERY.md) | Reserved sections for user-supplied real images |
+| [Gallery](golden-gate/GALLERY.md) | Ten authentic MacBookPro9,1 screenshots with English/Romanian captions |
 | [Notices](NOTICE.md) | Licensing and upstream attribution |
 
 ## Next chapter
