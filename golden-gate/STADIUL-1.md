@@ -74,3 +74,18 @@ La 19 noiembrie, pachetul de referință complet nu era disponibil în fișierel
 Ramura privată de lucru pornește din [hao-patcher fb6542d](https://github.com/lythka/hao-patcher/commit/fb6542df15fc299266f788328e41fe908dd19b3e). Pentru comparații ulterioare, reperele upstream din 19 noiembrie sunt [hao-runtime 0714743](https://github.com/lythka/hao-runtime/commit/0714743d11fc76e29e310cab79f1d9f020a4bf74) și [hao-assets 22b18bf](https://github.com/lythka/hao-assets/commit/22b18bfd7d5e7adb2ec3d71c76582b1cabb8d252). Tabelul configurației fizice identifică separat versiunile efectiv folosite la probă.
 
 [Instantaneul surselor constructorului folosit pe 9,1](https://github.com/StefanAlMare/GoldenGate-MBP91/tree/0b3d86aba06b3c0d85fc9436f4395194664e75fe) păstrează cele zece fișiere de adaptare pe baza originală 6bd75aa. Include profilul hardware, selecția pachetelor și generarea EFI. Stările de validare din profiluri reflectă momentul construirii, anterior probei fizice. Imaginea, EFI-ul binar, intrările Apple și capturile brute rămân materiale locale.
+
+## Observații hardware după prima probă Metal — 20 noiembrie 2026
+
+**StefanAlMare** a confirmat pe MacBookPro9,1 următoarele comportamente fizice:
+
+- Ecranul intern este controlat în mod obișnuit de **Intel HD 4000**, când este folosit singur.
+- Cu monitor extern conectat prin adaptorul direct mini DisplayPort–HDMI funcțional, **NVIDIA GT 650M controlează ambele ecrane**.
+- După deconectarea monitorului prin aceeași conexiune directă, **ecranul intern revine la Intel**.
+- Lansarea aplicației **Photos** poate activa **NVIDIA pentru ecranul intern chiar fără monitor extern**.
+- HDMI prin **hub Thunderbolt** a afișat imagine dacă era conectat de la pornire; o deconectare anterioară prin hub a lăsat ambele ecrane negre și rămâne de investigat.
+
+Utilizatorul a confirmat și **Wi-Fi, Bluetooth, Ethernet, tastatură, mouse, trackpad, iluminarea tastaturii și ecranului, reglarea luminozității, tastele de volum, USB și sunet**. Toate aplicațiile încercate în ultima sesiune s-au deschis **cu excepția Weather**. Comenzile Wi-Fi/Bluetooth funcționează, dar pictogramele native din bara de meniu nu sunt vizibile. NTFS/exFAT nu se montează, iar graficele bateriei sunt incorecte, deși panoul se deschide.
+
+Aceste observații fizice extind raportul inițial, dar nu reprezintă validarea automată exhaustivă a tuturor scenariilor GMUX, Thunderbolt, grafice sau de aplicații.
+

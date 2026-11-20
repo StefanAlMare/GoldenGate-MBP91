@@ -1,58 +1,190 @@
-# Golden Gate pe MacBookPro9,1
+<div align="center">
 
-**Pe 19 noiembrie 2026 am ajuns la desktopul macOS 27.2.1 Golden Gate (26B131), pornind de pe un SSD USB extern, pe un MacBook Pro de 15″ din 2012.** Am repornit laptopul și ne-am autentificat din nou. Pe 20 noiembrie am închis prima etapă cu două imagini documentate. A este prima care a pornit. B este exemplarul pe care am verificat și reparat folosirea zilnică a desktopului.
+# GOLDEN GATE
+### Bringing macOS 27 to the dual-GPU MacBook Pro 15″ (2012)
 
-## De unde am plecat
+**An independent, hardware-tested adaptation of [lythka's HAO project](https://github.com/lythka/hao-patcher) for MacBookPro9,1.**
 
-Am descoperit proiectul HAO al lui **lythka**, care adusese Golden Gate pe MacBookPro9,2, modelul de 13″ din 2012. Aveam un laptop din aceeași generație, cu procesor din aceeași familie Ivy Bridge și cu grafică Intel HD 4000. Modelul nostru de 15″, **MacBookPro9,1**, are în plus o placă NVIDIA GeForce GT 650M și comutatorul grafic GMUX. Am pornit de la codul autorului ca să aflăm dacă putem porni sistemul pe acest hardware și folosi ambele plăci grafice. [Proiectul HAO](https://github.com/lythka/hao-patcher) · [Documentația originală în română](README.upstream.ro.md)
+**ENGLISH** &nbsp; | &nbsp; [**ROMÂNĂ — COMPLETE EDITION**](README.ro.md)
 
-## Imaginea A — de la codul HAO la USB
+![Stage](https://img.shields.io/badge/STAGE%201-DESKTOP%20VERIFIED-247a5a?style=flat-square)
+![System](https://img.shields.io/badge/macOS%2027.2.1-26B131-315d85?style=flat-square)
+![Hardware](https://img.shields.io/badge/MacBookPro9%2C1-15%E2%80%B3%20Mid%202012-505866?style=flat-square)
+![Maturity](https://img.shields.io/badge/STATUS-EXPERIMENTAL-b77d31?style=flat-square)
 
-1. **Am definit profilul laptopului.** Am pornit de la constructorul HAO `6bd75aab`. Am adaptat profilul OpenCore pentru GMUX și selecția driverelor Intel Ivy Bridge și NVIDIA Kepler din OpenCore Legacy Patcher. Am păstrat driverul Intel pentru ecranul intern și am inclus driverele NVIDIA necesare GT 650M. EFI-ul de bază a trecut verificarea cu `ocvalidate`.
-2. **Am compilat pe iMac.** Am combinat sistemul Apple Golden `26B131` cu componentele Intel din Tahoe `25G342`. Am compilat local runtime-ul HAO `1547dcb4` și extensia HaoExec. La împachetare am verificat 963 de executabile Apple, inclusiv `launchd` și `xpcproxy`, necesare încă de la pornire.
-3. **Am asamblat imaginea.** Am pregătit bibliotecile Metal, animația „Hello” din prima configurare, driverele, colecțiile kernel, volumele APFS și Preboot. Profilul hardware al imaginii A cuprindea 38 de operații. Imaginea completă avea 80 GiB.
-4. **Am scris și verificat SSD-ul.** După transfer am recitit integral cei 80 GiB. Amprenta SHA-256 de pe USB a coincis cu aceea a imaginii de pe iMac. Am extins apoi containerul APFS la capacitatea SSD-ului și am verificat din nou partiția EFI. [Sursele și verificările etapelor 2–13](golden-gate/etape-a/INDEX.md) · [Sursele constructorului A](https://github.com/StefanAlMare/GoldenGate-MBP91/tree/0b3d86aba06b3c0d85fc9436f4395194664e75fe)
+**[The vision](#the-vision) · [Hardware in action](#hardware-in-action) · [Development](#the-development-story) · [Technical foundation](#engineering-foundation) · [Open challenges](#what-remains-open) · [Gallery](#visual-gallery)**
 
-## Cum am ajuns la prima configurare
+</div>
 
-| Pornire pe 9,1 | Ce am observat |
+> [!IMPORTANT]
+> **A working desktop, not yet a finished distribution.** On **19 November 2026**, Golden Gate 27.2.1 (26B131) reached Setup Assistant, account creation and the desktop on a real **15-inch Mid 2012 MacBook Pro**, booting from an external USB SSD. Restart and sign-in were subsequently confirmed. On **20 November**, a second image received focused repairs verified on the laptop. **Stage 1 is complete; the project remains experimental.**
+
+## The vision
+
+**What if the breakthrough that brought macOS Golden Gate to the 13-inch 2012 MacBook Pro could be extended to its more complex 15-inch sibling?**
+
+[lythka](https://github.com/lythka), the original creator of **HAO**, had shown that a MacBookPro9,2 could run Golden Gate by combining an Intel platform foundation with an ARM-to-x86 execution runtime. The 15-inch **MacBookPro9,1** shares the Intel Ivy Bridge generation and HD Graphics 4000—but adds an **NVIDIA GeForce GT 650M** and Apple's **GMUX**, the physical graphics multiplexer.
+
+This is not a model-name substitution. It requires a compatible Intel kernel environment, boot and driver infrastructure, an ARM application translation layer, legacy graphics acceleration, and **real graphics switching between two GPUs**.
+
+The project was initiated and directed by **[StefanAlMare](https://github.com/StefanAlMare)** to answer that technical question on real hardware. The goal is to **boot, configure and use Golden Gate on MacBookPro9,1**, document reproducible achievements, and investigate the remaining compatibility boundaries. The laptop's working Tahoe/OCLP installation has been retained independently.
+
+## The test platform
+
+| Component | Configuration |
 |---|---|
-| Cu volumele interne disponibile pentru automontare | Bara de progres s-a oprit în jur de 60%. Discul RAM de 512 MiB folosit de prima configurare a rămas fără partiții. |
-| Cu NTFS exclus de la automontare | exFAT a rămas disponibil. Discul RAM a avut același comportament, iar Setup Assistant nu a apărut. |
-| Cu câte o regulă `ro,noauto` pentru NTFS și exFAT | A apărut Setup Assistant. Am parcurs configurarea, am ajuns la desktop și ne-am autentificat din nou după repornire. |
+| **Machine** | MacBook Pro 15-inch, Mid 2012 — MacBookPro9,1 |
+| **CPU** | Intel Core i7-3615QM, Ivy Bridge |
+| **Integrated graphics** | Intel HD Graphics 4000 |
+| **Discrete graphics** | NVIDIA GeForce GT 650M, 512 MB |
+| **Graphics multiplexer** | Apple GMUX |
+| **Internal LCD** | 1680 × 1050 |
+| **Operating system** | macOS Golden Gate 27.2.1, build **26B131** |
+| **Intel donor** | macOS Tahoe 26.7.3, build **25G342** |
+| **Boot and patching** | OpenCore, OpenCore Legacy Patcher, HAO |
+| **Installation media** | External 256 GB USB SSD; original **80 GiB** APFS image |
 
-În timpul blocajului, DiskImages aștepta Disk Arbitration, iar stivele serviciilor arătau o cerere de montare prin LiveFS și FSKit. Capturile nu identifică partiția respectivei cereri. Pe acest laptop, rezultatul reproductibil a fost prima configurare cu ambele volume excluse.
+## Hardware in action
 
-La desktop am confirmat Wi-Fi, Bluetooth, sunetul, USB-ul, tastatura, trackpadul și tastele de luminozitate și volum. Ecranul intern a fost identificat pe Intel HD 4000. Separat, o probă Metal a selectat explicit GT 650M, a desenat o suprafață de 4 × 4 pixeli și a recitit corect toți cei 16 pixeli. [Cele trei porniri și proba Metal](golden-gate/STADIUL-1.md)
+**The achievement goes beyond a bootable image.** The laptop's primary hardware works, and the dual-GPU subsystem has shown meaningful switching behavior in real use.
 
-## Imaginea B — ce am schimbat și reparat
+| Area | Observed on MacBookPro9,1 |
+|---|---|
+| **Intel HD 4000 / internal display** | The built-in screen works at native resolution and is driven by **Intel** in the normal single-display configuration. |
+| **NVIDIA GT 650M** | Recognized and usable. An explicit **Metal clear-and-readback** test on GT 650M returned **16/16 correct pixels**. |
+| **GMUX + external monitor** | **Both displays switch to NVIDIA** when an external monitor is attached through the working direct video connection. |
+| **GMUX after disconnect** | When that external monitor is removed through the working direct connection, the **internal screen returns to Intel HD 4000**. |
+| **Application-driven GPU switching** | Opening **Photos** can put the internal screen on **NVIDIA without an external monitor**. |
+| **External display** | Video through a direct mini DisplayPort–HDMI adapter works, including connection and reconnection. |
+| **Thunderbolt hub** | HDMI video through the hub worked with the display connected at startup. **An earlier HDMI hot-unplug through the hub blacked out both displays**; that path remains unresolved. |
+| **Connectivity** | **Wi-Fi, Bluetooth and Ethernet work.** The Wi-Fi and Bluetooth menu-bar **symbols are missing**, although the radios and clickable controls function. |
+| **Input and illumination** | **Keyboard, mouse, trackpad, keyboard backlight, screen backlight, brightness keys and volume keys** work. |
+| **USB and audio** | USB devices and sound operate in the tested configuration. |
+| **Battery** | Battery data can be read and the Battery settings panel opens after repair; **the usage graphs are still incorrect**. |
 
-Am păstrat același sistem și același runtime. Pentru a investiga pictogramele și Finder, am scos din profil două suprascrieri Kepler ale componentelor de imagine ImageIO și CMPhoto. Profilul a trecut de la 38 la 36 de operații, iar lista folosită la pregătirea cache-ului, de la 12 la 10 intrări. Driverele Intel și NVIDIA au rămas prezente. Reparațiile de mai jos au fost aplicate ulterior pe SSD-ul B și verificate pe laptop după repornire. [Comparația tehnică A/B](https://github.com/StefanAlMare/GoldenGate-MBP91/blob/6ba34ef2f16e9442783ee9fbb724366673465670/docs/mbp91-kepler-imaging-test.ro.md)
+### Dynamic graphics, not merely detected devices
 
-| Problemă | Intervenție | Rezultat pe MacBookPro9,1 |
+The difference matters: **GMUX switching has been observed physically**. With the internal panel alone, Intel is used; attach an external monitor and NVIDIA drives both screens; remove that monitor and the internal display returns to Intel. **Photos can also trigger the NVIDIA path without an external monitor.**
+
+This is stronger evidence than finding both GPUs in System Information. It is **not yet proof of every graphics workload or hot-plug condition**: the specific NVIDIA Metal test covers a 4 × 4 surface, some transparency artifacts remain, and HDMI unplugging through the Thunderbolt hub previously failed.
+
+[**Hardware test evidence**](golden-gate/STAGE-1.md) · [**Engineering interpretation**](golden-gate/ENGINEERING.md)
+
+## Desktop and applications
+
+**Every built-in application tried in the latest hands-on testing opened, except Weather.** This is the operator's report—not a claim that every Apple application and every feature has been exhaustively certified.
+
+The usable desktop includes **Finder, Dock, window management, System Settings and Photos**, alongside the other apps tested. The second build also received verified, measurable fixes:
+
+| Component | Engineering intervention | Measured or observed result |
 |---|---|---|
-| Finder se bloca, iar pictogramele aplicațiilor lipseau. | După testarea cache-ului și a clienților IconServices, am instalat pe snapshot agentul Apple `iconservicesagent` cu cod Intel nativ din Tahoe `25G422`. | Cele patru cereri pentru pictograma dosarului Aplicații au trecut de la câte 73 de erori la zero. După repornire, Finder a funcționat de la autentificare. |
-| Dock-ul nu reapărea corect, iar mărirea și etichetele pictogramelor erau afectate. | Am corectat în SkyLight modul în care HAO citea starea butonului mouse-ului. | Cele șase indicații false de apăsare au dispărut. După repornire au funcționat reapariția Dock-ului, mărirea și etichetele. |
-| Tragerea unei ferestre declanșa aranjarea în mozaic fără să fie cerută. | Am completat aceeași corecție SkyLight cu citirea stării tastei Opțiune. | După instalare și repornire, ferestrele au putut fi trase normal. |
-| Configurări sistem → Baterie se închidea. | Am corectat în Foundation apelul Swift `DateComponents` folosit de PowerPreferences. | Panoul s-a deschis și a permis alegerea între 24 de ore și 10 zile. Afișarea graficelor a rămas parțială. |
+| **Finder / IconServices** | Native Intel IconServices agent from Tahoe 25G422 | Four repeated icon requests went from **73 errors each to zero**; Finder responsive after restart |
+| **Dock** | SkyLight bridge repair for mouse-button state | Magnification, icon labels and auto-reveal restored |
+| **Window management** | SkyLight Option-key state bridge correction | Windows drag normally without unwanted tiling |
+| **Battery preferences** | Foundation/Swift <code>DateComponents</code> compatibility repair | Battery pane no longer crashes on opening; period selectors work, **charts still incorrect** |
 
-[Registrul intervențiilor, al experimentelor retrase și al probelor pe B](golden-gate/REGISTRU-TEHNIC-B.md)
+**Weather** remains the notable app that will not open. Some **Control Center** interactions still produce Swift crashes even though the desktop and most tested applications launch.
 
-## Ce a rămas deschis la închiderea primei etape
+[**Image B repair ledger**](golden-gate/REGISTRU-TEHNIC-B.md)
 
-- **Volumele NTFS și exFAT.** Pe B, cererile de montare pentru citire au expirat. MacBook-ul a ajuns la login și cu regulile `ro,auto`, dar ambele volume erau nemontate. Au fost identificate componentele Apple pentru ambele formate, iar extensia exFAT a recunoscut o resursă.
-- **Bara de meniu, Centrul de control și Dock-ul.** Zonele Wi-Fi și Bluetooth răspund la clic, dar simbolurile sunt invizibile. Simbolul bateriei este incomplet. Deschiderea Centrului de control a produs două căderi cu aceeași stivă. Indicatorul de sub o aplicație din Dock poate dispărea în timp ce aplicația continuă să ruleze.
-- **Graficele bateriei și Vreme.** Sistemul citește bateria, iar istoricul conține valori. Graficul de 24 de ore apare intermitent la schimbarea ferestrei active, atât cu ecranul pe Intel, cât și pe NVIDIA. Aplicația Vreme se închide la lansare, iar pictograma ei lipsește din bară.
-- **Monitorul extern și randarea Metal.** Adaptorul direct mini DisplayPort–HDMI permite conectarea și reconectarea monitorului. Prin hubul Thunderbolt am obținut imagine cu monitorul conectat la pornire, iar scoaterea HDMI a lăsat ambele ecrane negre. Pe NVIDIA persistă unele artefacte în transparențe și pe contururi.
+## Engineering foundation
 
-**Prima etapă s-a închis la 20 noiembrie 2026.** Reperul rămas este un MacBookPro9,1 care pornește de pe USB, ajunge la desktop și se poate autentifica după repornire, cu cele patru intervenții de mai sus probate pe B. [Istoricul cronologic A/B](golden-gate/ISTORIC-A-B.md)
+The image combines several independently identifiable layers:
 
-## Credite
-
-| Contribuitor | Rol |
+| Layer | Why it is needed |
 |---|---|
-| **lythka** | Autorul principal al proiectului HAO și al bazei pentru Golden Gate pe Intel. |
-| **Ștefan Ilmare** ([@StefanAlMare](https://github.com/StefanAlMare)) | Inițiativa și coordonarea adaptării pentru 9,1, probele pe hardware și confirmarea rezultatelor pe ecran. |
-| **Codex (OpenAI)** | Implementarea adaptărilor locale, a instrumentelor de construcție și diagnostic și documentarea rezultatelor. |
+| **Golden Gate 26B131** | macOS 27 System and Data, Darwin 27, applications and frameworks |
+| **Tahoe Intel donors** | x86_64 kernel extensions, boot/Recovery resources, DriverKit and selected native services |
+| **HAO Runtime** | ARM-to-Intel execution, embedded launcher stubs and HaoExec |
+| **OpenCore Legacy Patcher** | Intel Ivy Bridge, NVIDIA Kepler, legacy Metal and hardware compatibility |
+| **OpenCore / GMUX profile** | MacBookPro9,1-specific EFI, kernel binding and dual-GPU configuration |
+| **Verification** | SHA256 input checks, BootKC/SystemKC validation, <code>ocvalidate</code>, complete disk-image readback and actual hardware tests |
 
-[Licențe și atribuire, inclusiv OpenCore Legacy Patcher](NOTICE.md) · [English overview](README.en.md)
+The local adaptation began from [HAO Patcher **6bd75aa**](https://github.com/lythka/hao-patcher/commit/6bd75aab112d1078acd8e75180eb510672461365) and [HAO Runtime **1547dcb**](https://github.com/lythka/hao-runtime/commit/1547dcb4e19a2ab0843086e3288223f998507a4c).
+
+**Important technical boundary:** the locally produced bootstrap is not identical to the author's complete HAO compatibility payload; external interface units, thunk libraries and an optional async provider were not fully reproduced. That difference is documented, but is **not in itself a demonstrated explanation for any particular remaining UI failure**.
+
+[**Read the engineering dossier**](golden-gate/ENGINEERING.md) · [**Inspect the original build records**](golden-gate/etape-a/INDEX.md)
+
+## The development story
+
+| Date | Milestone | Result |
+|---|---|---|
+| **17–18 Nov 2026** | **Hardware adaptation** | 9,1 target, Intel/NVIDIA/GMUX and OCLP configuration; OpenCore EFI validated |
+| **17–18 Nov** | **Source and runtime work** | Golden Gate plus Tahoe donors, HAO build, 963 ARM-only program stubs, graphics assets and Intel kernel collections |
+| **18 Nov** | **Image A** | 80 GiB APFS image built, written and fully read back from USB with matching SHA256; GPT/APFS expanded to the external SSD |
+| **19 Nov** | **First desktop** | After investigating automount issues, Setup Assistant, account creation, desktop and login after restart succeeded |
+| **19 Nov** | **GPU proof** | Internal panel identified on HD 4000; NVIDIA Metal 4 × 4 clear/readback passed **16/16 pixels** |
+| **20 Nov** | **Image B / Stage 1 close** | Two Kepler ImageIO/CMPhoto overrides removed (**38 → 36** hardware operations); focused Finder, Dock, window and Battery fixes verified |
+
+### The first obstacle: a stalled Setup Assistant
+
+The first boots stopped near **60% progress**, while networking, keyboard events and disk activity continued. Logs identified pending operations involving **DiskImages, Disk Arbitration, FSKit and the temporary setup RAM disk**.
+
+A sequence of tests changed automount behavior for the internal NTFS and exFAT partitions. With **both excluded from automount** by UUID-specific <code>ro,noauto</code> rules, Setup Assistant appeared and the Mac reached desktop.
+
+This documents **a working configuration on one physical Mac**, not a universal diagnosis of macOS/FSKit; the stack traces did not conclusively identify the individual mount request.
+
+### Two images, two distinct milestones
+
+**Image A** achieved the initial boot, setup and desktop. **Image B** kept both Intel and NVIDIA drivers but removed two Kepler overrides of ImageIO and CMPhoto, changing the hardware recipe from **38 to 36 operations**. Additional repairs were then applied on B and evaluated separately.
+
+[**Complete A/B history**](golden-gate/ISTORIC-A-B.md) · [**Build archive, steps 2–13**](golden-gate/etape-a/INDEX.md)
+
+## What remains open
+
+| Workstream | Current status |
+|---|---|
+| **Wi-Fi and Bluetooth menu-bar icons** | **Missing/invisible**, despite functioning radios and clickable controls |
+| **NTFS and exFAT** | **Neither filesystem has been successfully mounted** in the documented Golden Gate setup |
+| **Battery usage graphs** | Battery panel crash **fixed**, but displayed history/usage **not yet correct** |
+| **Weather** | **Does not open** in the documented build |
+| **Control Center / desktop polish** | Some Swift crashes, incomplete battery/menu icons and inconsistent active-app indicators |
+| **Thunderbolt / monitor hot-unplug** | External HDMI via the hub worked at startup but unplugging it previously blanked both screens; direct adapter tests worked |
+| **NVIDIA rendering** | Some remaining visual artifacts in transparencies and borders |
+| **HAO compatibility** | Complete external ABI units/thunks/provider still to be compared with upstream reference |
+
+These are **specific engineering tasks**, not reasons to overlook the already working hardware.
+
+## Visual gallery
+
+We are preparing a dedicated gallery for **authentic photographs and screenshots from this MacBookPro9,1**, including the first desktop, internal/external GPU switching, Photos, the Thunderbolt connection, Metal tests and before/after repairs.
+
+**[Project gallery — photo sections prepared](golden-gate/GALLERY.md)**
+
+The [original HAO gallery](docs/gallery.md) illustrates the **13-inch MacBookPro9,2** and is not photographic proof of this 15-inch adaptation.
+
+## Project documentation
+
+| Document | Contents |
+|---|---|
+| [Engineering dossier](golden-gate/ENGINEERING.md) | Platform, kernel/graphics layers, verified test scope and limitations |
+| [Stage 1 hardware report](golden-gate/STAGE-1.md) | First boot, desktop, NVIDIA test and subsequent GPU observations |
+| [A/B development history](golden-gate/ISTORIC-A-B.md) | Full technical chronology in Romanian |
+| [Image B technical ledger](golden-gate/REGISTRU-TEHNIC-B.md) | Repairs, rollback experiments and hashes in Romanian |
+| [Source archive](golden-gate/etape-a/INDEX.md) | Original construction steps and script provenance |
+| [Volume test kit](golden-gate/kit-volume/README.md) | Volume inventory and automount test planning |
+| [Gallery](golden-gate/GALLERY.md) | Reserved sections for user-supplied real images |
+| [Notices](NOTICE.md) | Licensing and upstream attribution |
+
+## Next chapter
+
+**Stage 1 closed on 20 November 2026.** The next objectives are correcting the wireless menu-bar symbols, restoring NTFS/exFAT mounts and battery charts, improving Weather and Control Center behavior, completing GMUX/Thunderbolt hot-plug validation, and evaluating the remaining external HAO ABI components.
+
+## People and credits
+
+**[lythka](https://github.com/lythka)** — original creator and principal author of **HAO**, including the Golden Gate-on-Intel foundation and MacBookPro9,2 demonstration.
+
+**[StefanAlMare](https://github.com/StefanAlMare)** — initiation, technical direction and coordination of the **MacBookPro9,1 adaptation**, hands-on hardware tests and verification of results.
+
+**Codex (OpenAI)** — implementation assistance for local integration, construction tools, debugging and technical repairs, evaluated on the real laptop.
+
+**Dortania, Acidanthera and other upstream contributors** — essential OCLP, OpenCore and related technologies; see [NOTICE.md](NOTICE.md).
+
+> **Independent research preview.** Not affiliated with or endorsed by Apple. No Apple IPSWs, installers or macOS images are redistributed here. Success on this one test computer does not establish support for every Intel Mac.
+
+<div align="center">
+
+[**Complete Romanian edition**](README.ro.md) · [**Engineering dossier**](golden-gate/ENGINEERING.md) · [**Original HAO**](https://github.com/lythka/hao-patcher)
+
+</div>

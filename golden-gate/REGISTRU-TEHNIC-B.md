@@ -2,7 +2,7 @@
 
 **MacBookPro9,1 · Golden Gate 27.2.1 (26B131) · 19–20 noiembrie 2026.** [Istoricul A și B](ISTORIC-A-B.md) descrie construcția, SSD-ul și cele trei porniri. Aici sunt identificate fișierele instalate pe B, experimentele retrase și dovezile pentru fiecare decizie. SHA-256 din coloanele „raport” identifică raportul text original. Observațiile pe ecran sunt atribuite separat.
 
-Autorul principal al HAO este **lythka**. **Ștefan Ilmare (@StefanAlMare)** a condus portarea locală și probele fizice. Implementarea instrumentelor și a adaptărilor locale a fost realizată cu **Codex (OpenAI)**.
+Autorul principal al HAO este **lythka**. **StefanAlMare ([@StefanAlMare](https://github.com/StefanAlMare))** a condus portarea locală și probele fizice. Implementarea instrumentelor și a adaptărilor locale a fost realizată cu **Codex (OpenAI)**.
 
 ## Intrările constructorului
 

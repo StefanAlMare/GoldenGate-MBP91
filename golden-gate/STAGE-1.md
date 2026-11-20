@@ -78,3 +78,18 @@ The complete reference package was unavailable in the project files and archives
 The private working branch starts at [hao-patcher fb6542d](https://github.com/lythka/hao-patcher/commit/fb6542df15fc299266f788328e41fe908dd19b3e). The upstream references recorded on 19 November for future comparisons are [hao-runtime 0714743](https://github.com/lythka/hao-runtime/commit/0714743d11fc76e29e310cab79f1d9f020a4bf74) and [hao-assets 22b18bf](https://github.com/lythka/hao-assets/commit/22b18bfd7d5e7adb2ec3d71c76582b1cabb8d252). The test system table records the versions used on the physical Mac.
 
 The [MacBookPro9,1 builder snapshot](https://github.com/StefanAlMare/GoldenGate-MBP91/tree/0b3d86aba06b3c0d85fc9436f4395194664e75fe) preserves the ten adaptation files on their original base, 6bd75aa. They cover the hardware profile, package selection and EFI generation. Validation fields in the profiles reflect the state at build time, before the physical test. The image, EFI binaries, Apple inputs and raw captures are kept locally.
+
+## Hardware observations added after the initial Metal test — 20 November 2026
+
+**StefanAlMare** also reported these physical GMUX/display observations on MacBookPro9,1:
+
+- Internal panel normally driven by **Intel HD 4000** when used alone.
+- With an external monitor attached through a working direct mini DisplayPort–HDMI path, **NVIDIA GT 650M drives both screens**.
+- After removing that monitor through the direct connection, the **internal panel returns to Intel**.
+- Launching **Photos** can select **NVIDIA for the internal screen even without an external monitor**.
+- HDMI through a **Thunderbolt hub** displayed video when connected at boot; an earlier hub-HDMI disconnect blacked out both screens, and that path is still an open issue.
+
+The operator also confirmed **Wi-Fi, Bluetooth, Ethernet, keyboard, mouse, trackpad, keyboard/screen backlighting, brightness and volume keys, USB and sound**. All applications attempted in the latest session opened **except Weather**. Wi-Fi/Bluetooth controls work despite invisible native menu-bar icons. NTFS/exFAT mounting and accurate Battery usage graphs remain unresolved; the Battery pane itself now opens.
+
+These direct observations expand the initial hardware record. They are not an exhaustive automated certification of GMUX, Thunderbolt, applications or all graphics workloads.
+
