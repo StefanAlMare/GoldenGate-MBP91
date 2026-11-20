@@ -14,8 +14,19 @@ Use the [original 26B131 shared-cache recipe](../patches/golden-gate-userspace/s
 
 Record which GPU owns the internal LCD. On each installation, open the same volume, check its icon and the Finder View menu, and look at the Wi‑Fi and Bluetooth symbols. Repeat on the other GPU if the system can switch. Verify the NVIDIA Metal readback afterwards. A change in symptoms identifies the pair of framework merges as a candidate cause. A subsequent one-at-a-time comparison can distinguish the two.
 
-### Checking the GPU operation used for symbols
+### Physical shader results on Golden 26B131
 
-The system build of the [framebuffer adapter](../patches/golden-gate-metal-framebuffer/build/src/encoder.m) attaches to the Intel Metal driver class `MTLIGAccelDevice`. The staged GeForce driver has no direct dependency on that adapter. The GT 650M has already cleared a texture and returned 16 correct pixels. Whether it correctly reads the existing pixel colour inside a fragment shader remains open.
+On 19 November 2026, two runs on MacBookPro9,1 with local HAO runtime `1547dcb` returned identical GPU records. A native x86_64 process selected each Metal registry ID and drew the same 32 × 32 Wi-Fi mask, covering 175 foreground pixels and 849 background pixels.
 
-For the GPU comparison, run the same precompiled framebuffer-read test and its texture-read control on each device. Record the device name and registry ID from the probe itself, along with the pixel comparison and the appearance of the Wi-Fi symbol. The shipped probe uses the default Metal device on each launch. A pair of results with the same ID exercises only one GPU. The USB comparison changes the two shared imaging frameworks. Both installations retain the same per-GPU adapters.
+| GPU | Separate texture read | Color attachment read in the fragment shader |
+| --- | --- | --- |
+| Intel HD Graphics 4000 | 1,024/1,024, maximum channel error 0/255 | 1,024/1,024, maximum channel error 0/255 |
+| NVIDIA GeForce GT 650M | 1,024/1,024, maximum channel error 1/255 | Pipeline creation for `fetch0` returned `CompilerError` 2, `Unhandled metadata type: air.render_target`. No pixels were produced by this case. |
+
+The [upstream system adapter](../patches/golden-gate-metal-framebuffer/build/src/encoder.m) selects the Intel driver class `MTLIGAccelDevice`. Its presence in the test process alone does not establish which GPU it adapted. The two earlier Finder and IconServices captures recorded placeholder images and XPC errors. They do not associate a Finder request with the NVIDIA shader error.
+
+The follow-up on this MacBook confirmed the author's pre-transformed `fetch0` on the GT 650M. With separate source and destination textures, the driver reported the input at index 127. The readback matched all 175 symbol pixels and all 849 background pixels, with a maximum channel error of 1/255. In the same session the original shader again failed at pipeline creation. This was an offscreen test. The active WindowServer render device at login, on-screen icons and Finder responsiveness remain to be validated.
+
+The retained login log on 19 November 2026 counted 33 WindowServer entries matching a broad graphics/error text filter in the first 30 seconds of the current WindowServer process (16:30:37–16:31:07 EET). The filter did not identify a GPU or report the exact shader rejection in those entries. The next capture started at 16:31:26 EET. It returned at least 25,826 Finder image-generation entries with error 4097 and 25,914 IconServices listener rejections before the log reader hit its 90-second timeout. These are counts of log records. The period between the two captures is unobserved. The second capture is incomplete.
+
+For the external-copy comparison, retain the same EFI, runtime, ImageIO and CMPhoto on both sides and change only the Kepler adaptation. At first login compare Wi-Fi and Bluetooth with sound, Time Machine and eject. In the same Finder window check the Tahoe volume icon, time to respond, and IconServices image failures during the observation. The separate image experiment that omits two imaging frameworks answers a different question.
