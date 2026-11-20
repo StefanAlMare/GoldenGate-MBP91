@@ -1,0 +1,577 @@
+#!/bin/sh
+printf '%s\n' 'Șablon A/B. Completează profilul local înainte de utilizare.' >&2
+exit 78
+# GG_BEGIN_SOURCE
+#!/usr/bin/python3
+"""Configure Dock and collect evidence for the menu bar and Battery pane on Golden B."""
+import base64
+from contextlib import contextmanager
+from datetime import datetime
+import hashlib
+import os
+from pathlib import Path
+import re
+import runpy
+import shlex
+import subprocess
+import sys
+import tempfile
+
+HERE = Path(__file__).resolve().parent
+CLIENT = runpy.run_path(str(HERE / "GoldenGate-Client-Intel-B.command"))
+SSH = runpy.run_path(str(HERE / "GoldenGate-Test-Cache-A-pe-B.command"))["SSH"]
+OUTPUT = CLIENT["OUTPUT"]
+
+POWER_REPORT = r"""
+/usr/bin/pmset -g batt
+/usr/bin/arch -x86_64 /usr/bin/ruby --disable-gems -EUTF-8:UTF-8 -rjson -e '# encoding: UTF-8
+paths = [File.expand_path("~/Library/Logs/DiagnosticReports"), "/Library/Logs/DiagnosticReports"]
+reports = paths.flat_map { |d| Dir.glob(File.join(d, "{,Retired/}PowerPreferences*.ips")) }
+wanted = ENV["GG_POWER_PID"]
+seen = false
+latest = nil
+reports.sort_by { |f| File.mtime(f) }.reverse.each do |f|
+  begin
+    data = File.open(f) { |io| io.gets; JSON.parse(io.read) }
+    next unless data["procName"] == "PowerPreferences"
+    pid = Integer(data.fetch("pid"))
+    latest ||= [File.basename(f),pid]
+    next if wanted && pid.to_s != wanted
+    thread = data.fetch("threads").fetch(data.fetch("faultingThread"))
+    frames = thread.fetch("frames").first(22).map do |v|
+      bin = data.fetch("usedImages")[v["imageIndex"]] || {}
+      [bin["name"], v["symbol"] || v["imageOffset"]].compact.join("+")
+    end
+    puts "GG_POWER #{File.basename(f)} PID=#{pid} #{data.dig("exception","type")} #{data.dig("exception","signal")}"
+    puts "GG_POWER #{frames.join(" > ")}"
+    root = "/private/var/log/hao/user/#{Process.uid}"
+    ["console.log", "console.log.0"].each do |name|
+      p = File.join(root, name)
+      next unless File.readable?(p)
+      File.foreach(p) do |line|
+        next unless line.start_with?("hao[PowerPreferences:#{pid}]:")
+        if line.include?("guest brk")
+          puts "GG_POWER " + line.scrub.strip[0,300]
+        end
+      end
+    end
+    seen = true
+    break
+  rescue StandardError => error
+    warn "GG_POWER #{File.basename(f)}: #{error.class}"
+  end
+end
+unless seen
+  puts "GG_POWER Nu am găsit un raport PowerPreferences lizibil#{wanted ? " cu PID #{wanted}" : ""}."
+  puts "GG_POWER Ultimul raport identificat: #{latest[0]} PID=#{latest[1]}." if latest
+  exit 3
+end
+'
+"""
+
+
+def section(name):
+    return (HERE / name).read_text()
+
+
+def transfer(name, source, executable=False):
+    return transfer_file(name, OUTPUT / "GoldenGate-Calendar-B" / source, executable)
+
+
+def transfer_file(name, path, executable=False):
+    payload = path.read_bytes()
+    digest = hashlib.sha256(payload).hexdigest()
+    block = base64.encodebytes(payload).decode("ascii")
+    mode = "700" if executable else "600"
+    return f"""/usr/bin/base64 -D > "$t/{name}" <<'GG_IMAGE' || exit 3
+{block}GG_IMAGE
+[[ $(/usr/bin/shasum -a 256 "$t/{name}" | /usr/bin/awk '{{print $1}}') == {digest} ]] || exit 3
+/bin/chmod {mode} "$t/{name}" || exit 3
+"""
+
+
+def calendar_probe():
+    unit = runpy.run_path(str(HERE / "golden_b_calendar_unit.py"))
+    uuid = unit["GOLDEN_FOUNDATION_UUID"]
+    parts = ["(", transfer("x86_64", "calendar-x86_64", True),
+             transfer("arm64", "calendar-arm64", True), """
+gg_run() { /usr/bin/perl -e 'alarm 20; exec @ARGV or die $!' "$@"; }
+gg_run "$t/x86_64"; echo "GG_CALENDAR Intel cod=$?"
+gg_run /usr/libexec/hao -- "$t/arm64"; echo "GG_CALENDAR ARM inițial cod=$?"
+""", """uuid=$(gg_run /usr/bin/arch -x86_64 /usr/bin/ruby --disable-gems - <<'GG_UUID'
+""" + unit["FOUNDATION_UUID_RUBY"] + "\nGG_UUID\n)",
+             f'[[ $uuid == {uuid} ]] || {{ echo "GG_CALENDAR Foundation diferă sau UUID indisponibil: $uuid"; exit 3; }}',
+             '/bin/mkdir "$t/if" || exit 3', transfer("if/" + uuid, uuid),
+             """
+echo "GG_CALENDAR Corecție temporară"
+result=$(gg_run /usr/bin/env HAO_IF_DIR="$t/if" /usr/libexec/hao -- "$t/arm64")
+rc=$?
+echo "$result"
+echo "GG_CALENDAR ARM cu unitate cod=$rc"
+[[ $rc == 0 && $result == *"arch=arm64 hour=0 date=present"* ]]
+)
+"""]
+    return "\n".join(parts)
+
+
+def hover_probe():
+    return [transfer("dock-hover", "dock-hover-x86_64", True), section("golden_b_dock_sample.sh"),
+            r"""
+pid=$(/usr/bin/pgrep -u "$uid" -x Dock)
+[[ $pid =~ ^[1-9][0-9]*$ ]] || { echo 'Dock nu are un PID unic în sesiune.'; exit 3; }
+echo "GG_DOCK Proba de mișcare pentru Dock PID=$pid."
+for key in magnification autohide largesize orientation magnify-immutable; do
+    value=$(/usr/bin/defaults read com.apple.dock "$key" 2>/dev/null) || value='implicită sau indisponibilă'
+    echo "GG_DOCK $key=$value"
+done
+echo 'Pe MacBook: pornește cu săgeata în interiorul unei ferestre Finder sau Configurări. La START, treci pe două pictograme ale Dock-ului, câte două secunde pe fiecare, apoi revino în fereastră.'
+/usr/bin/perl -e 'alarm 34; exec @ARGV or die $!' /usr/bin/log stream --style compact --level debug --predicate "processIdentifier == $pid AND (eventMessage CONTAINS[c] 'Adding mouse enter event' OR eventMessage CONTAINS[c] 'Adding mouse leave event' OR eventMessage CONTAINS[c] 'DockEventMouse' OR eventMessage CONTAINS[c] 'magnification override' OR eventMessage CONTAINS[c] 'mouse not in rect' OR eventMessage CONTAINS[c] 'Starting autohide' OR eventMessage CONTAINS[c] 'Skipping no-op autohide' OR eventMessage CONTAINS[c] 'Autohide Pref Value' OR eventMessage CONTAINS[c] 'not hide')" > "$t/dock-events" 2>&1 &
+log_pid=$!
+trap 'kill "$log_pid" 2>/dev/null || :; /bin/rm -rf "$t"' EXIT
+/bin/sleep 3
+echo 'START — mișcă acum săgeata pe MacBook.'
+gg_sample_dock "$pid" > "$t/sample.txt" 2>&1 &
+sampler=$!
+"$t/dock-hover" "$pid"; dock_status=$?
+wait "$sampler"; sample_status=$?
+/bin/kill -INT "$log_pid" 2>/dev/null
+wait "$log_pid" 2>/dev/null || :
+trap '/bin/rm -rf "$t"' EXIT
+/bin/cat "$t/sample.txt"
+/usr/bin/awk '/Adding mouse (enter|leave) event|DockEventMouse|magnification override|mouse not in rect|Starting autohide|Skipping no-op autohide|Autohide Pref Value|NOT hide/ && !/Filtering the log data/ {if (++n <= 20) print "GG_TRACK " $0}
+    /Invalid|not permitted|denied|[Ee]rror:/ {print "GG_TRACK " $0}
+    END {print "GG_TRACK Evenimente publicate de Dock: " n+0 ". Lipsa unui mesaj nu dovedește că gestul s-a pierdut."}' "$t/dock-events"
+echo "GG_DOCK Cod captură cursor=$dock_status, eșantionare Dock=$sample_status."
+[[ $(/usr/bin/pgrep -u "$uid" -x Dock) == "$pid" ]] || { echo 'Dock s-a relansat în timpul probei.'; exit 3; }
+"""]
+
+
+def dock_overlay_plan():
+    unit = "21acabfab6cc3ec9a3cf6d4d6b637f5a"
+    rel = "usr/lib/hao/if/" + unit
+    overlay = OUTPUT / "GoldenGate-Dock-B-overlay"
+    return ['mkdir -p "$t/overlay/files/usr/lib/hao/if" || exit 3',
+            transfer_file("overlay/manifest.json", overlay / "manifest.json"),
+            transfer_file("overlay/files/" + rel, overlay / "files" / rel),
+            'unit=' + unit, r"""
+echo 'GG_PLAN Golden B confirmat. Verificare în sesiunea utilizatorului.'
+info=$(/usr/sbin/diskutil info -plist /) || exit 3
+for key in DeviceIdentifier APFSVolumeGroupID APFSSnapshot APFSSnapshotName APFSSnapshotUUID; do
+    result=$(echo "$info" | /usr/bin/plutil -extract "$key" raw -o - - 2>/dev/null) &&
+        echo "GG_PLAN $key=$result"
+done
+for dir in /usr /usr/lib /usr/lib/hao /usr/lib/hao/if; do
+    if [[ -L $dir || ( -e $dir && ! -d $dir ) ]]; then
+        echo "GG_PLAN Tip neașteptat de intrare la $dir."
+        exit 3
+    fi
+done
+target=/usr/lib/hao/if/$unit
+if [[ -L $target || ( -e $target && ! -f $target ) ]]; then
+    echo 'GG_PLAN Destinația nu este un fișier obișnuit.'; exit 3
+elif [[ -f $target ]]; then
+    if ! /usr/bin/cmp -s "$target" "$t/overlay/files$target"; then
+        echo 'GG_PLAN Există deja o altă unitate SkyLight. Trebuie comparate înregistrările ei.'; exit 3
+    fi
+    echo 'GG_PLAN Unitatea verificată este deja pe sistem.'
+else
+    echo "GG_PLAN Unitate nouă, destinație $target (155 octeți)."
+fi
+if [[ ! -x /usr/local/bin/hao ]]; then
+    echo 'GG_PLAN Utilitarul hao lipsește pe Golden B. Planul oficial nu a putut fi rulat.'; exit 3
+fi
+gg_plan_run() { /usr/bin/perl -e 'alarm 45; exec @ARGV or die $!' "$@"; }
+gg_plan_run /usr/local/bin/hao patch --probe > "$t/probe.log" 2>&1; probe_rc=$?
+echo "GG_PLAN Inventar APFS și posibilitate de revenire, citite fără privilegii de administrator (cod $probe_rc)."
+/usr/bin/head -c 6000 "$t/probe.log"
+echo 'GG_PLAN Simulare HAO a modificării pe Golden B.'
+gg_plan_run /usr/local/bin/hao patch "$t/overlay" --live --dry-run --log json
+dock_status=$?
+echo "GG_PLAN Cod simulare HAO=$dock_status."
+"""]
+
+
+def symbol_raster_script():
+    clients = [
+        ("Ruby Intel", "/usr/bin/arch -x86_64 /usr/bin/ruby --disable-gems -EUTF-8:UTF-8 -",
+         "menu_symbol_intel.rb", "GG_INTEL_CONTROLS PASS"),
+        ("osascript", "/usr/bin/osascript -l JavaScript -", "menu_symbol_probe.js", "GG_SYMBOL_CONTROLS PASS"),
+    ]
+    parts = [CLIENT["GATE"], "export LC_ALL=en_US.UTF-8", "rc=0",
+             "echo 'Golden B confirmat. Măsurăm simbolurile în două procese AppKit.'"]
+    for name, command, source, confirmation in clients:
+        # osascript returns a multiline JS string on stdout. A missing glyph is
+        # reportable; a crashed client or a failed bitmap control is inconclusive.
+        parts.extend([
+            "echo " + shlex.quote("GG_SYMBOL_CLIENT " + name),
+            "result=$(/usr/bin/perl -e 'alarm 50; exec @ARGV or die $!' " +
+            command + " 2>&1 <<'GG_SYMBOL_SOURCE'",
+            section(source), "GG_SYMBOL_SOURCE", ")", "status=$?",
+            'echo "$result"',
+            f"""if [[ $status != 0 || "$result" != *'{confirmation}'* ]]; then
+    echo "GG_SYMBOL_INCOMPLET cod_proces=$status"
+    rc=3
+fi""",
+        ])
+    return "\n".join(parts + ['exit "$rc"'])
+
+
+def remote_script(mode="all", power_pid=None, history_time=None):
+    if mode in ("--crash-centru-control", "--detalii-centru-control"):
+        cmd = ["/usr/local/lib/hao/python/bin/python3.12", "-IBu", "-", history_time]
+        if mode == "--detalii-centru-control":
+            cmd.append(mode)
+        return "\n".join([CLIENT["GATE"], "exec " + shlex.join(cmd) + " <<'GG_CC_REPORTS'",
+                          section("golden_b_controlcenter_reports.py"), "GG_CC_REPORTS"])
+    if mode == "--valori-baterie":
+        cmd = ["/usr/local/lib/hao/python/bin/python3.12", "-IBu", "-", history_time, str(power_pid)]
+        return "\n".join([CLIENT["GATE"], "exec " + shlex.join(cmd) + " <<'GG_BATTERY_VALUES'",
+                          section("golden_b_battery_values.py"), "GG_BATTERY_VALUES"])
+    if mode == "--raport-baterie":
+        search = "unset GG_POWER_PID" if power_pid is None else "export GG_POWER_PID=" + str(int(power_pid))
+        return "\n".join([CLIENT["GATE"], search, POWER_REPORT])
+    if mode == "--simboluri-meniu":
+        return symbol_raster_script()
+    display = "source /dev/stdin <<'GG_DISPLAY'\n" + section("display_reference.sh") + "\nGG_DISPLAY"
+    if mode == "--pictograme-meniu":
+        return "\n".join([CLIENT["GATE"], display, section("golden_b_menu_items.sh"),
+                           section("golden_b_menubar.sh"), section("golden_b_menu_capture.sh")])
+    parts = ["gg_session() {", "exec 2>&1", CLIENT["GATE"], '[[ $uid == 501 && $(id -un) == @@GUI_USER@@ ]] || exit 2',
+             "umask 077", 't=$(/usr/bin/mktemp -d /private/tmp/gg-golden-b.XXXXXXXX) || exit 3',
+             """trap '/bin/rm -rf "$t"' EXIT"""]
+    if mode == "--proba-ferestre":
+        collector = runpy.run_path(str(HERE / "golden_b_finder_build.py"))
+        parts.extend([transfer("window-option-x86_64", "window-option-x86_64", True),
+                      transfer("window-option-arm64", "window-option-arm64", True),
+                      transfer("skylight-option", "skylight-option"),
+                      section("golden_b_window_option.sh"),
+                      'gg_window_option "$t"; dock_status=$?',
+                      "(\n" + collector["capture_command"]() + "\n)",
+                      'echo "GG_FINDER_BUILD Cod citire donator=$?."'])
+    elif mode == "--verifica-finder":
+        parts.extend(["gg_ws_source=" + shlex.quote(section("finder_windowserver_state.rb")),
+                      section("golden_b_finder_relaunch.sh"),
+                      "gg_recover_finder verify-installed; dock_status=$?"])
+    elif mode == "--finder":
+        collector = runpy.run_path(str(HERE / "golden_b_finder_build.py"))
+        parts.extend(["gg_ws_source=" + shlex.quote(section("finder_windowserver_state.rb")),
+                      section("golden_b_finder_relaunch.sh"), "gg_recover_finder; dock_status=$?",
+                      "(\n" + collector["capture_command"]() + "\n)",
+                      'echo "GG_FINDER_BUILD Cod citire donator=$?."'])
+    elif mode == "--verifica-baterie":
+        parts.extend([transfer("calendar-arm64", "calendar-arm64", True), section("golden_b_battery_history.sh"), r"""
+/usr/bin/pmset -g batt
+unit=/usr/lib/hao/if/5119c02feccd3c209858a2d9e725c718
+expected=1a1220644804cd8b9ea448d9a55421dcd3742b8542862fc54c48d2c11541d48d
+if [[ ! -f $unit || -L $unit || $(/usr/bin/shasum -a 256 "$unit" | /usr/bin/awk '{print $1}') != "$expected" ]]; then
+    echo 'GG_POWER Unitatea Foundation nu este activă în sistemul pornit.'
+    exit 3
+fi
+unset HAO_IF_DIR
+echo "GG_POWER Unitatea Foundation din sistemul pornit corespunde SHA-256 $expected."
+result=$(/usr/bin/perl -e 'alarm 20; exec @ARGV or die $!' /usr/libexec/hao -- "$t/calendar-arm64")
+probe_rc=$?
+printf '%s\n' "$result"
+if [[ $probe_rc != 0 || "$result" != *"arch=arm64 hour=0 date=present"* ]]; then
+    echo 'GG_POWER Sonda Calendar nu confirmă rezultatul așteptat pentru unitatea activă.'
+    exit 3
+fi
+/usr/bin/touch "$t/start" || exit 3
+prior_start=$(/bin/date -v-15M '+%Y-%m-%d %H:%M:%S')
+prior_end=$(/bin/date '+%Y-%m-%d %H:%M:%S')
+gg_battery_history live stream --level debug --timeout 45 &
+history_pid=$!
+/bin/sleep 1
+echo 'GG_POWER Se deschide Baterie. Pe MacBook alege 10 zile, așteaptă 5 secunde, apoi 24 de ore și lasă panoul deschis.'
+/usr/bin/open 'x-apple.systempreferences:com.apple.Battery-Settings.extension' || { wait "$history_pid"; exit 3; }
+dock_status=0
+pid=
+# Give the pane up to 12 seconds to start, then follow this one PID for 30 seconds.
+for i in 1 2 3 4 5 6; do
+    pid=$(/usr/bin/pgrep -u "$uid" -x PowerPreferences)
+    [[ $pid =~ ^[1-9][0-9]*$ ]] && break
+    /bin/sleep 2
+done
+if [[ $pid =~ ^[1-9][0-9]*$ ]]; then
+    for i in 1 2 3 4 5 6; do
+        /bin/sleep 5
+        [[ $(/usr/bin/pgrep -u "$uid" -x PowerPreferences) == "$pid" ]] || { dock_status=3; break; }
+    done
+    if (( dock_status == 0 )); then
+        echo "GG_POWER Același PID $pid a rămas activ la toate citirile timp de 30 s."
+    else
+        echo "GG_POWER Procesul $pid a dispărut sau s-a schimbat."
+    fi
+else
+    echo 'GG_POWER Nu a fost identificat un singur proces PowerPreferences.'
+    dock_status=3
+fi
+for folder in "$HOME/Library/Logs/DiagnosticReports" /Library/Logs/DiagnosticReports; do
+    [[ -d "$folder" ]] || continue
+    new=$(/usr/bin/find "$folder" -type f -name 'PowerPreferences*.ips' -newer "$t/start" -print 2>/dev/null)
+    if [[ -n $new ]]; then
+        echo "GG_POWER Raport de crash nou: ${new##*/}"
+        dock_status=3
+    fi
+done
+wait "$history_pid" || dock_status=3
+gg_battery_history precedent show --info --debug --start "$prior_start" --end "$prior_end" || dock_status=3
+"""])
+    elif mode == "--plan-dock":
+        parts.extend(dock_overlay_plan())
+    elif mode == "--istoric-dock":
+        skylight_uuid = "21acabfab6cc3ec9a3cf6d4d6b637f5a"
+        parts.extend([transfer("dock-button-x86_64", "dock-button-x86_64", True),
+                      transfer("dock-button-arm64", "dock-button-arm64", True),
+                      transfer(skylight_uuid, skylight_uuid),
+                      section("golden_b_dock_button.sh"), section("golden_b_dock_history.sh"),
+                      'gg_dock_button "$t"; button_status=$?',
+                      'gg_dock_history; history_status=$?',
+                      'echo "GG_DOCK Cod probă buton=$button_status, jurnal=$history_status."',
+                      'dock_status=0; (( button_status == 0 && history_status == 0 )) || dock_status=3'])
+    elif mode == "--hover":
+        parts.extend(hover_probe())
+    else:
+        parts.extend([transfer("dock-prefs", "dock-prefs-x86_64", True), section("golden_b_dock.sh"),
+                      'gg_configure_dock "$t/dock-prefs"; dock_status=$?'])
+    if mode == "all":
+        parts.extend([POWER_REPORT, calendar_probe(), display, section("golden_b_menubar.sh"),
+                      'gg_inspect_menubar; echo "GG_MENUBAR cod=$?"'])
+    return "\n".join(parts + ['exit "$dock_status"', "}", "gg_session </dev/null\n"])
+
+
+@contextmanager
+def staged_finder():
+    """Send the imported Apple agent as data; leave the terminal free for sudo."""
+    digest = "0c34b609f914b0f1e1e263268528e04715ce59d4de34770cba3af1d40d752de8"
+    builder = runpy.run_path(str(HERE / "golden_b_finder_build.py"))["BUILDER"]
+    row = (builder / "pipeline/inputs/golden/26B131/mbp91_desktop").read_text().split()
+    if (len(row) != 2 or not re.fullmatch(r"[0-9a-f]{64}", row[0]) or
+            row[1] != f"store/artifacts/mbp91-desktop-26B131-25G422-{row[0]}"):
+        raise ValueError("Intrarea locală pentru agentul Tahoe diferă.")
+    data = (builder / row[1] / "root/System/Library/CoreServices/iconservicesagent").read_bytes()
+    if hashlib.sha256(data).hexdigest() != digest:
+        raise ValueError("Agentul de pe iMac diferă de exemplarul validat pe MacBook.")
+
+    stage = CLIENT["GATE"] + r"""
+[[ $uid == 501 && $(/usr/bin/id -un) == @@GUI_USER@@ ]] || exit 2
+umask 077
+f=$(/usr/bin/mktemp /private/tmp/gg-finder-agent.XXXXXXXX) || exit 3
+trap '/bin/rm -f "$f"' EXIT
+/bin/cat > "$f" || exit 3
+got=$(/usr/bin/shasum -a 256 "$f") || exit 3
+[[ ${got%% *} == "$1" ]] || exit 3
+printf '%s\n' "$f" || exit 3
+trap - EXIT
+"""
+    # A short private socket name also fits macOS's AF_UNIX path limit.
+    with tempfile.TemporaryDirectory(prefix="gg-finder-", dir="/tmp") as work:
+        control = SSH + ["-S", str(Path(work) / "ctl")]
+        host = CLIENT["HOST"]
+        remote = None
+        master = subprocess.run(control + ["-M", "-o", "ControlPersist=45", "-fN", host])
+        if master.returncode:
+            raise OSError(f"Autentificarea SSH pe Golden B a ieșit cu codul {master.returncode}.")
+        slave = control + ["-o", "BatchMode=yes"]
+        try:
+            cmd = "/bin/bash -c " + shlex.quote(stage) + " gg-stage " + digest
+            sent = subprocess.run(slave + ["-T", host, cmd], input=data, stdout=subprocess.PIPE)
+            candidate = sent.stdout.decode("ascii", errors="replace").strip()
+            if sent.returncode or not re.fullmatch(r"/private/tmp/gg-finder-agent\.[a-zA-Z0-9]{8}", candidate):
+                raise OSError(f"Transferul agentului pe Golden B nu s-a confirmat (cod {sent.returncode}).")
+            remote = candidate
+            yield slave, remote
+        finally:
+            if remote is not None:
+                subprocess.run(slave + ["-T", host, "/bin/rm -f " + shlex.quote(remote)],
+                               stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
+            subprocess.run(control + ["-O", "exit", host], stdin=subprocess.DEVNULL,
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def apply_over_ssh(report, kind="dock", append=False):
+    if kind == "finder":
+        try:
+            manifest = (HERE / "finder-iconservices-manifest.json").read_bytes()
+            with staged_finder() as (ssh, agent_path):
+                return apply_in_terminal(report, kind, append, ssh, manifest, agent_path)
+        except (OSError, ValueError) as error:
+            msg = f"GG_FINDER Aplicare incompletă: {error}"
+            print(msg, flush=True)
+            with report.open("a") as log:
+                print(msg, file=log)
+            return 3
+    pack_dir, filename = {
+        "dock": ("GoldenGate-Dock-B-overlay", "21acabfab6cc3ec9a3cf6d4d6b637f5a"),
+        "baterie": ("GoldenGate-Baterie-B-overlay", "5119c02feccd3c209858a2d9e725c718"),
+        "ferestre": ("GoldenGate-Ferestre-B-overlay", "21acabfab6cc3ec9a3cf6d4d6b637f5a"),
+    }[kind]
+    overlay = OUTPUT / pack_dir
+    unit = overlay / "files/usr/lib/hao/if" / filename
+    return apply_in_terminal(report, kind, append, SSH, (overlay / "manifest.json").read_bytes(),
+                             base64.b64encode(unit.read_bytes()).decode("ascii"))
+
+
+def apply_in_terminal(report, kind, append, transport, manifest, payload):
+    artifacts = [base64.b64encode(manifest).decode("ascii"), payload]
+    command = ["/usr/local/lib/hao/python/bin/python3.12", "-IBu", "-c", section("golden_b_dock_install.py"),
+               *artifacts, section("golden_b_dock_applied.py"), kind]
+    marker = b"GG_DOCK_INCEPUT"
+    root_command = "echo " + marker.decode() + "\nexec " + " ".join(map(shlex.quote, command))
+    outer = CLIENT["GATE"] + """
+[[ $uid == 501 && $(/usr/bin/id -un) == @@GUI_USER@@ ]] || exit 2
+/bin/stty -echo || exit 2
+exec /usr/bin/sudo -H -p 'Parola de administrator pe Golden B: ' -- /bin/bash -c """ + shlex.quote(root_command)
+    ssh = transport + ["-tt", CLIENT["HOST"], "/bin/bash -c " + shlex.quote(outer)]
+    return record_terminal(ssh, report, marker, append)
+
+
+def record_terminal(ssh, report, marker, append=False):
+    # SSH and sudo read from the terminal. Show their prompts immediately and
+    # start recording only after sudo has started the privileged child.
+    with report.open("ab" if append else "xb") as log, subprocess.Popen(ssh, stdout=subprocess.PIPE) as child:
+        recording = False
+        tail = b""
+        boundary = marker + b"\n"
+        while chunk := os.read(child.stdout.fileno(), 4096):
+            sys.stdout.buffer.write(chunk)
+            sys.stdout.buffer.flush()
+            normalized = chunk.replace(b"\r", b"")
+            if recording:
+                log.write(normalized)
+            else:
+                buf = tail + normalized
+                start = buf.find(boundary)
+                if start >= 0:
+                    recording = True
+                    log.write(buf[start:])
+                tail = buf[-len(boundary):]
+            log.flush()
+        rc = child.wait()
+        log.write(f"Cod de ieșire: {rc}\n".encode())
+        return rc
+
+
+def status_item_command(js, resource_probe):
+    inner = CLIENT["GATE"] + """
+[[ $(/bin/launchctl managername) == Aqua ]] || { echo "Sesiunea grafică este indisponibilă."; exit 2; }
+echo GG_STATUS_AQUA
+"""
+    osascript = "/usr/bin/osascript -l JavaScript -e "
+    inner += ("/usr/bin/perl -e 'alarm 25; exec @ARGV or die $!' " + osascript + shlex.quote(resource_probe) +
+              " || echo GG_STATUS_RESURSA_INDISPONIBILA\n")
+    inner += "exec /usr/bin/perl -e 'alarm 75; exec @ARGV or die $!' " + osascript + shlex.quote(js)
+    outer = CLIENT["GATE"] + """
+if [[ $(/bin/launchctl managername) == Aqua ]]; then
+    runner=()
+elif [[ $(/bin/launchctl asuser "$uid" /bin/launchctl managername 2>/dev/null) == Aqua ]]; then
+    runner=(/bin/launchctl asuser "$uid")
+else
+    runner=(/usr/bin/sudo -p 'Parola de administrator pe Golden B pentru sesiunea grafică: ' --
+            /bin/launchctl asuser "$uid" /usr/bin/sudo -n -H -u "#$uid" --)
+fi
+exec "${runner[@]}" /bin/bash -c """ + shlex.quote(inner)
+    return "/bin/bash -c " + shlex.quote(outer)
+
+
+def visual_menu(report):
+    remote = status_item_command(section("menu_status_probe.js"), section("controlcenter_bundle_probe.js"))
+    print("Urmărește în bara de meniu a MacBook-ului marcajele GG1, GG2, GG3 și GG4.", flush=True)
+    rc = record_terminal(SSH + ["-tt", CLIENT["HOST"], remote], report, b"GG_STATUS_AQUA")
+    if rc == 0 and sys.stdin.isatty():
+        try:
+            note = input("Ce s-a văzut lângă GG1–GG4? Enter pentru a omite: ").strip()
+        except EOFError:
+            note = ""
+        if note:
+            with report.open("a") as log:
+                print("Observație vizuală:", note, file=log)
+    return rc
+
+
+def main():
+    os.umask(0o077)
+    modes = {"--raport-baterie", "--bara-vizuala", "--simboluri-meniu", "--pictograme-meniu", "--finder", "--verifica-finder", "--dock", "--hover", "--istoric-dock", "--plan-dock", "--aplica-dock",
+             "--aplica-baterie", "--aplica-ferestre", "--aplica-finder", "--verifica-baterie", "--valori-baterie", "--crash-centru-control", "--detalii-centru-control", "--proba-ferestre", "--repara-ferestre"}
+    args = sys.argv[1:]
+    power_pid = None
+    history_time = None
+    if args and args[0] in ("--valori-baterie", "--crash-centru-control", "--detalii-centru-control"):
+        if args[0] != "--valori-baterie":
+            if len(args) != 2:
+                sys.exit(f"Utilizare: {args[0]} DATA_ISO_CU_FUS")
+        else:
+            if len(args) != 3 or not re.fullmatch(r"[1-9][0-9]{0,8}", args[2]):
+                sys.exit("Utilizare: --valori-baterie DATA_ISO_CU_FUS PID")
+            power_pid = int(args[2])
+        try:
+            stamp = datetime.fromisoformat(args[1])
+        except ValueError:
+            sys.exit("Data trebuie să fie în format ISO și să includă fusul orar.")
+        if stamp.tzinfo is None:
+            sys.exit("Data trebuie să includă fusul orar al raportului.")
+        history_time = stamp.isoformat()
+        args = args[:1]
+    if len(args) == 2 and args[0] == "--raport-baterie":
+        if not re.fullmatch(r"[1-9][0-9]{0,8}", args[1]):
+            sys.exit("PID-ul PowerPreferences trebuie să fie un număr pozitiv.")
+        power_pid = int(args[1])
+        args = args[:1]
+    if len(args) > 1 or (args and args[0] not in modes):
+        sys.exit("Argument opțional: " + ", ".join(sorted(modes)))
+    mode = args[0] if args else "all"
+    prefix = {"--raport-baterie": "Golden-B-PowerPreferences-", "--crash-centru-control": "Golden-B-Incidente-Bara-", "--detalii-centru-control": "Golden-B-Detalii-Centru-", "--simboluri-meniu": "Golden-B-Simboluri-", "--bara-vizuala": "Golden-B-Bara-Vizuala-"}.get(
+        mode, "Golden-B-Dock-Baterie-")
+    folder = Path(tempfile.mkdtemp(prefix=prefix, dir=OUTPUT))
+    report = folder / "raport.txt"
+    print("Raport pe iMac:", report, flush=True)
+    if mode == "--bara-vizuala":
+        return visual_menu(report)
+    if mode.startswith("--aplica-"):
+        return apply_over_ssh(report, mode[len("--aplica-"):])
+    phase = "--proba-ferestre" if mode == "--repara-ferestre" else mode
+    script = remote_script(phase, power_pid, history_time).encode()
+    collector = (runpy.run_path(str(HERE / "golden_b_finder_build.py"))
+                 if phase in ("--finder", "--proba-ferestre") else None)
+    imported = False
+    verified_option = False
+    cmd = SSH + ["-T", CLIENT["HOST"], "/bin/bash -s"]
+    # A file for stdin allows SSH to stream results and prompt on the terminal.
+    with tempfile.TemporaryFile() as data, report.open("x") as log:
+        data.write(script)
+        data.seek(0)
+        # OpenSSH reads the password from the terminal. Keep connection errors
+        # alongside the Battery results, including failures before login.
+        stderr = subprocess.STDOUT if mode in ("--verifica-baterie", "--valori-baterie", "--crash-centru-control", "--detalii-centru-control") else None
+        with subprocess.Popen(cmd, stdin=data, stdout=subprocess.PIPE, stderr=stderr) as proc:
+            for raw in proc.stdout:
+                line = raw.decode("utf-8", errors="replace")
+                if line.rstrip("\r\n") == "GG_WINDOW_OPTION verdict=normalizare_confirmata":
+                    verified_option = True
+                if collector and line.startswith(collector["PREFIX"]):
+                    try:
+                        line = collector["accept_payload"](line) + "\n"
+                        imported = True
+                    except (OSError, ValueError, subprocess.SubprocessError) as error:
+                        line = f"GG_FINDER_BUILD Import nereușit: {type(error).__name__}.\n"
+                if not (sys.argv[1:] == ["--hover"] and line.startswith(("GG_AX_ITEM ", "GG_WINDOW ", "GG_POINTER "))):
+                    print(line, end="", flush=True)
+                print(line, end="", file=log, flush=True)
+            rc = proc.wait()
+        if collector and not imported:
+            print("GG_FINDER_BUILD Donatorul pentru imagine nu a fost importat.", flush=True)
+            print("GG_FINDER_BUILD Donatorul pentru imagine nu a fost importat.", file=log)
+            if phase == "--finder":
+                rc = rc or 3
+        print("Cod de ieșire:", rc, file=log)
+    if mode == "--repara-ferestre" and rc == 0:
+        if not verified_option:
+            print("Corecția pentru tasta Opțiune nu a fost confirmată pe acest MacBook.")
+            return 3
+        print("Proba fizică a confirmat corecția. Începe aplicarea pe Golden B.", flush=True)
+        return apply_over_ssh(report, "ferestre", append=True)
+    return rc
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -1,0 +1,190 @@
+#!/bin/sh
+printf '%s\n' 'Șablon A/B. Completează profilul local înainte de utilizare.' >&2
+exit 78
+# GG_BEGIN_SOURCE
+#!/usr/bin/python3
+"""Colectează aceeași probă Finder în sesiunea Aqua din Tahoe și Golden."""
+import base64
+import os
+import re
+import shlex
+import struct
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+OUTPUT = HERE.parents[2] / "outputs"
+MODULES = ("icon_reference", "finder_reference", "display_reference", "graphics_log_reference")
+EXPERIMENT = r"""
+set -u
+uid=$(/usr/bin/id -u)
+model=$(/usr/sbin/sysctl -n hw.model)
+build=$(/usr/bin/sw_vers -buildVersion)
+version=$(/usr/bin/sw_vers -productVersion)
+if [[ $uid == 0 || $model != MacBookPro9,1 || $uid != "$(/usr/bin/stat -f %u /dev/console)" ||
+      $(/bin/launchctl managername) != Aqua ]]; then
+    echo 'Proba cere utilizatorul conectat la desktop pe MacBookPro9,1.'; exit 2
+fi
+if [[ $build == 26B131 ]]; then system=Golden
+elif [[ $version == 26.* && $build == 25* ]]; then system=Tahoe
+else echo "Build în afara comparației: $version ($build)"; exit 2; fi
+printf 'GG_SYSTEM %s %s\n' "$system" "$build"
+printf 'MacBookPro9,1 | macOS %s (%s) | Aqua | %s\n' "$version" "$build" "$(/bin/date '+%Y-%m-%d %H:%M:%S %z')"
+/usr/bin/csrutil status
+group=$(/usr/bin/perl -e 'alarm 5; exec @ARGV or die $!' /usr/sbin/diskutil info -plist / 2>/dev/null |
+    /usr/bin/plutil -extract APFSVolumeGroupID raw -o - - 2>/dev/null) || group=
+case "$group" in
+    @@UUID_A_GROUP@@) echo 'Volum pornit | grupul APFS al imaginii A' ;;
+    @@UUID_B_GROUP@@) echo 'Volum pornit | grupul APFS al imaginii B' ;;
+    *) echo "Volum pornit | grup APFS ${group:-indisponibil}" ;;
+esac
+echo 'Arhitecturile din executabilele instalate'
+/usr/bin/file /System/Library/CoreServices/Finder.app/Contents/MacOS/Finder /System/Library/CoreServices/iconservicesagent
+echo 'Cache înainte de cereri'
+finder_reference_cache
+finder_reference </dev/null &
+sample_pid=$!
+start= end= icon_rc=3
+while IFS= read -r row; do
+    case "$row" in
+        "Cerere apps_repeat |"*)
+            printf '%s\n' "$row"; echo 'Cache după cele trei cereri'; finder_reference_cache ;;
+        "GG_ICON_LOG start="*)
+            span=${row#GG_ICON_LOG start=}
+            start=${span%% end=*}; tail=${span#* end=}; end=${tail%% rc=*}
+            printf '%s\n' "$row" ;;
+        "GG_STATUS "*) icon_rc=${row#GG_STATUS } ;;
+        *) printf '%s\n' "$row" ;;
+    esac
+done < <(icon_reference; printf 'GG_STATUS %d\n' "$?")
+wait "$sample_pid"
+if [[ -n $start && -n $end ]]; then graphics_log_reference "$start" "$end"; fi
+display_reference
+icon_reference_preview
+echo "GG_END $system $build"
+exit "$icon_rc"
+"""
+
+def aqua_command():
+    # Keep whole shell sources intact, including literal Perl and JXA heredocs.
+    sources = []
+    for mod in MODULES:
+        content = (HERE / (mod + ".sh")).read_text()
+        delimiter = "GG_SOURCE_" + mod.upper()
+        assert delimiter not in content.splitlines()
+        sources.append("source /dev/stdin <<'" + delimiter + "'\n" + content + "\n" + delimiter)
+    return "\n".join(sources) + "\n" + EXPERIMENT
+
+
+def ssh_command(dest):
+    body = shlex.quote(aqua_command())
+    shell = """
+uid=$(/usr/bin/id -u)
+if [[ $uid == 0 || $uid != "$(/usr/bin/stat -f %u /dev/console)" ||
+      $(/usr/sbin/sysctl -n hw.model) != MacBookPro9,1 ]]; then
+    echo 'Conectează-te la desktop pe MacBookPro9,1 înainte de probă.'; exit 2
+fi
+if [[ $(/bin/launchctl managername) == Aqua ]]; then
+    exec /bin/bash -c BODY
+fi
+echo 'Acces la sesiunea grafică. La Password introdu parola de pe MacBook.'
+exec /usr/bin/sudo -p 'Parola de administrator de pe MacBook:
+' -- /bin/launchctl asuser "$uid" /usr/bin/sudo -n -H -u "#$uid" -- /bin/bash -c BODY
+""".replace("BODY", body)
+    return ["/usr/bin/ssh", "-tt", "-F", "/dev/null", "-o", "StrictHostKeyChecking=yes",
+            "-o", "UpdateHostKeys=no", "-o", "ClearAllForwardings=yes", "-o", "ForwardAgent=no",
+            "-o", "ForwardX11=no", "-o", "ConnectTimeout=8", "-o", "ServerAliveInterval=10",
+            "-o", "ServerAliveCountMax=3", dest, "/bin/bash -c " + shlex.quote(shell)]
+
+
+def preview(line, directory):
+    binary = base64.b64decode(line.removeprefix("GG_PREVIEW "), validate=True)
+    if (len(binary) > 65536 or len(binary) < 33 or binary[:8] != b"\x89PNG\r\n\x1a\n"
+            or binary[12:16] != b"IHDR" or struct.unpack(">II", binary[16:24]) != (64, 64)
+            or binary[-8:] != b"IEND\xaeB`\x82"):
+        raise ValueError("PNG nevalid")
+    path = directory / "Applications.png"
+    path.write_bytes(binary)
+    return "Pictograma primită prin AppKit pentru /Applications: " + str(path)
+
+
+def collect():
+    dest = os.environ.get("GOLDEN_GATE_SSH", "@@SSH_TARGET@@")
+    if len(sys.argv) != 1 or not re.fullmatch(r"[\w][\w.-]*@[\w][\w.-]*", dest, re.ASCII):
+        sys.exit("Rulează comanda fără argumente.")
+    os.umask(0o077)
+    directory = Path(tempfile.mkdtemp(prefix="GoldenGate-Compara-Finder.", dir=OUTPUT))
+    report = directory / "raport.txt"
+    system = None
+    build = None
+    observed_end = False
+    print("Raport pe iMac:", report, flush=True)
+    with report.open("x") as out, subprocess.Popen(ssh_command(dest), stdout=subprocess.PIPE) as proc:
+        # SSH authenticates via the terminal. Keep only the measurement part in the report.
+        for raw in iter(proc.stdout.readline, b""):
+            row = raw.decode("utf-8", errors="replace").rstrip("\r\n")
+            match = re.search(r"\bGG_SYSTEM (Golden|Tahoe) (\w+)$", row)
+            if match:
+                system, build = match.groups()
+                row = f"GG_SYSTEM {system} {build}"
+            if row.startswith("GG_PREVIEW "):
+                try:
+                    row = preview(row, directory)
+                except ValueError as err:
+                    row = "Previzualizare indisponibilă: " + str(err)
+            if system:
+                out.write(row + "\n")
+                out.flush()
+                if row == f"GG_END {system} {build}":
+                    observed_end = True
+            print(row, flush=True)
+        code = proc.wait()
+    if observed_end:
+        summarize(system, dest, report)
+    return code
+
+
+def read_measurements(path):
+    lines = path.read_text(errors="replace").splitlines()
+    head = next((x.split() for x in lines if x.startswith("GG_SYSTEM ")), [])
+    if len(head) != 3 or "GG_END " + " ".join(head[1:]) not in lines:
+        return None
+    rows = [dict(pair.split("=", 1) for pair in x.split()[1:]) for x in lines if x.startswith("GG_ICON tag=")]
+    return (head[1], head[2], rows) if len(rows) == 3 else None
+
+
+def summarize(system, dest, current):
+    (current.parent / "tinta.txt").write_text(dest + "\n")
+    other = "Tahoe" if system == "Golden" else "Golden"
+    compared = [read_measurements(current)]
+    files = sorted(OUTPUT.glob("GoldenGate-Compara-Finder.*/raport.txt"), key=lambda p: p.stat().st_mtime, reverse=True)
+    for candidate in files:
+        target = candidate.parent / "tinta.txt"
+        if candidate != current and target.is_file() and target.read_text().strip() == dest:
+            part = read_measurements(candidate)
+            if part and part[0] == other:
+                compared.append(part)
+                print("Raport pereche:", candidate)
+                break
+    if len(compared) == 1:
+        print("Pentru pereche lipsește rularea pe " + other + ".")
+    meaning = {"observed_4097":"4097 observat", "visible_no_4097":"IconServices vizibil fără 4097",
+               "no_client_records":"client invizibil în jurnal", "no_icon_records":"IconServices invizibil în jurnal",
+               "log_incomplete":"jurnal incomplet", "request_failed":"cerere eșuată"}
+    labels = {"root":"/", "apps_first":"/Applications prima", "apps_repeat":"/Applications repetată"}
+    for part in compared:
+        if part is None:
+            continue
+        os_name, build, measures = part
+        for m in measures:
+            note = meaning.get(m["evidence"], m["evidence"])
+            print(f'{os_name} {build} | {labels[m["tag"]]} | {m["elapsed_ms"]} ms | {m["tiff_bytes"]} octeți TIFF | {note} ({m["error4097"]} mesaje 4097 vizibile)')
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(collect())
+    except (OSError, KeyboardInterrupt) as error:
+        sys.exit("Colectare întreruptă. " + str(error))

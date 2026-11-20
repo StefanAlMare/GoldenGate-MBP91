@@ -1,0 +1,230 @@
+#!/bin/sh
+printf '%s\n' 'Șablon A/B. Completează profilul local înainte de utilizare.' >&2
+exit 78
+# GG_BEGIN_SOURCE
+#!/usr/bin/perl
+package GGIconUser;
+use strict;
+use warnings;
+use Digest::SHA qw(sha256_hex);
+use Fcntl qw(:DEFAULT :flock :mode O_DIRECTORY O_NOFOLLOW O_NONBLOCK);
+use IO::Handle;
+
+use constant SHA => 'fe6be8430620640f462def2224a9738b8965be2229dfe05179bad69d22ca68c0';
+use constant BYTES => 720896;
+use constant GROUP => '@@UUID_B_GROUP@@';
+
+sub capture {
+    my (@cmd) = @_;
+    open my $out, '-|', @cmd or die "Nu pot executa $cmd[0]: $!\n";
+    local $/;
+    my $result = <$out> // '';
+    close $out or die "Comanda $cmd[0] a eșuat.\n";
+    $result =~ s/\r?\n\z//;
+    return $result;
+}
+
+sub entry {
+    my ($p) = @_;
+    my @s = lstat($p);
+    return \@s if @s;
+    return undef if $!{ENOENT};
+    die "Nu pot verifica $p: $!\n";
+}
+
+sub directory {
+    my ($p, $private) = @_;
+    sysopen(my $d, $p, O_RDONLY|O_DIRECTORY|O_NOFOLLOW) or die "Director inaccesibil $p: $!\n";
+    my @s = stat($d);
+    die "Director nepotrivit: $p\n" unless @s && S_ISDIR($s[2]) && $s[4] == $> &&
+        ($private ? S_IMODE($s[2]) == 0700 : !($s[2] & 0022));
+    return $d;
+}
+
+sub same_inode {
+    my ($a,$b) = @_;
+    return $a && $b && $a->[0] == $b->[0] && $a->[1] == $b->[1];
+}
+
+sub donor_bytes {
+    my ($p, $owned) = @_;
+    sysopen(my $f, $p, O_RDONLY|O_NONBLOCK|O_NOFOLLOW) or die "Index inaccesibil: $p: $!\n";
+    my @s = stat($f);
+    die "Fișier de index necorespunzător: $p\n" unless @s && S_ISREG($s[2]) &&
+        $s[7] == BYTES && ($owned ? ($s[4] == $> && S_IMODE($s[2]) == 0600) :
+        (($s[4] == 0 || $s[4] == $>) && !($s[2] & 0022)));
+    my $bytes = '';
+    while (length($bytes) <= BYTES) {
+        my $n = sysread($f, my $part, 65536);
+        defined $n or die "Citirea indexului a eșuat: $!\n";
+        last unless $n;
+        $bytes .= $part;
+    }
+    die "Indexul nu mai are conținutul donatorului A; fișierul este păstrat.\n"
+        unless length($bytes) == BYTES && sha256_hex($bytes) eq SHA;
+    my ($version,$one,$rows,$buckets,$heap) = unpack('V5',$bytes);
+    my $start = 20 + 8*$buckets;
+    die "Geometrie neașteptată.\n" unless $version == 11 && $one == 1 &&
+        $rows == 456 && $buckets == 4000 && $heap == $rows*172 && $start+$heap <= length($bytes);
+    my %ids;
+    ++$ids{substr($bytes,$start+172*$_+96,16)} for 0..$rows-1;
+    die "Referințe UUID neașteptate.\n" unless keys(%ids) == 228 && !exists $ids{"\0"x16};
+    return ($bytes,\@s);
+}
+
+sub sync_dir {
+    my ($fh) = @_;
+    $fh->sync or die "Sincronizarea directorului a eșuat: $!\n";
+}
+
+sub install_receipt {
+    my ($source,$tmp,$receipt,$state) = @_;
+    my ($bytes) = donor_bytes($source,0);
+    sysopen(my $f, $tmp, O_WRONLY|O_CREAT|O_EXCL|O_NOFOLLOW,0600) or die "Creare index privat: $!\n";
+    print {$f} $bytes or die "Scriere index: $!\n";
+    $f->flush or die "Flush index: $!\n";
+    $f->sync or die "Sincronizare index: $!\n";
+    close $f or die "Închidere index: $!\n";
+    donor_bytes($tmp,1);
+    # Under the directory lock receipt is absent. Atomic rename leaves either
+    # the complete private receipt or just an unpublished temporary file.
+    rename($tmp,$receipt) or die "Publicare chitanță: $!\n";
+    sync_dir($state);
+}
+
+sub apply_or_undo {
+    my ($action,$stage,$dir,$parent) = @_;
+    die "Operație necunoscută.\n" unless $action =~ /\A(?:apply|undo|status)\z/;
+    my $cache = directory($dir,0);
+    my $parents = directory($parent,0);
+    my $statepath = "$parent/GoldenGate-MBP91-IconTrial-v1";
+    my $dst = "$dir/store.index";
+    unless (entry($statepath)) {
+        if ($action eq 'undo') { print "UNDO: nicio activare înregistrată.\n"; return }
+        if ($action eq 'status') {
+            die "store.index exista deja, fără chitanța probei.\n" if entry($dst);
+            print "GG_USER_STATE absent\n"; return;
+        }
+        die "store.index există deja; a fost păstrat.\n" if entry($dst);
+        mkdir($statepath,0700) || $!{EEXIST} or die "Creare director chitanță: $!\n";
+        sync_dir($parents);
+    }
+    my $state = directory($statepath,1);
+    flock($state,LOCK_EX|LOCK_NB) or die "Altă activare sau revenire este în desfășurare.\n";
+    die "Chitanța și cache-ul trebuie să fie pe același sistem de fișiere.\n"
+        unless (stat($state))[0] == (stat($cache))[0];
+    my $receipt = "$statepath/installed.index";
+    my $tmp = "$statepath/creating.index";
+    my $held = "$statepath/held-during-undo.index";
+    if ($action eq 'status') {
+        die "Revenire întreruptă; rulează undo înainte de activare.\n" if entry($held);
+        if (my $t = entry($tmp)) {
+            die "Index temporar neașteptat; păstrat.\n" unless S_ISREG($t->[2]) &&
+                $t->[4] == $> && S_IMODE($t->[2]) == 0600 && $t->[3] == 1;
+        }
+        my $current = entry($dst);
+        if (entry($receipt)) {
+            my (undef,$id) = donor_bytes($receipt,1);
+            die "Indexul curent este străin; păstrat.\n" if $current && !same_inode($current,$id);
+            print "GG_USER_STATE ", ($current ? 'active' : 'pending'), "\n";
+        } else {
+            die "store.index exista deja, fără chitanța probei.\n" if $current;
+            print "GG_USER_STATE absent\n";
+        }
+        return;
+    }
+    if (my $s = entry($tmp)) {
+        die "Fișier temporar neașteptat; păstrat: $tmp\n" unless S_ISREG($s->[2]) &&
+            $s->[4] == $> && S_IMODE($s->[2]) == 0600 && $s->[3] == 1;
+        unlink($tmp) or die "Curățare index nepublicat: $!\n";
+        sync_dir($state);
+    }
+    if ($action eq 'apply') {
+        die "Există o revenire întreruptă. Rulează undo.\n" if entry($held);
+        my $fresh = 0;
+        unless (entry($receipt)) {
+            die "store.index există deja; a fost păstrat.\n" if entry($dst);
+            install_receipt($stage,$tmp,$receipt,$state);
+            $fresh = 1;
+        }
+        my (undef,$id) = donor_bytes($receipt,1);
+        if (my $current = entry($dst)) {
+            unless (same_inode($id,$current)) {
+                if ($fresh) { unlink($receipt) or die "Chitanța nepublicată a fost păstrată: $!\n"; sync_dir($state) }
+                die "Un alt store.index este prezent; a fost păstrat.\n";
+            }
+            print "APPLIED: indexul donator este deja activ.\n"; return;
+        }
+        unless (link($receipt,$dst)) {
+            my $reason = "$!";
+            if ($fresh) { unlink($receipt) or die "Chitanța nepublicată a fost păstrată: $!\n"; sync_dir($state) }
+            die "Publicarea fără înlocuire a eșuat: $reason\n";
+        }
+        sync_dir($cache);
+        die "IconServices a înlocuit deja indexul; fișierul curent este păstrat.\n"
+            unless same_inode($id,entry($dst));
+        print "APPLIED: 456 înregistrări, 228 UUID-uri, mod 0600, SHA-256 ",SHA,".\n";
+        return;
+    }
+    unless (entry($receipt)) {
+        die "Fișier izolat fără chitanță, păstrat la $held\n" if entry($held);
+        print "UNDO: nicio activare înregistrată.\n"; return;
+    }
+    my (undef,$id) = donor_bytes($receipt,1);
+    if (!entry($held) && (my $current = entry($dst))) {
+        die "store.index a fost înlocuit; este păstrat.\n" unless same_inode($current,$id);
+        rename($dst,$held) or die "Izolarea indexului: $!\n";
+        sync_dir($state); sync_dir($cache);
+    }
+    if (my $h = entry($held)) {
+        # If another writer replaced dst during the rename, never unlink its
+        # inode without restoring a link. If dst is occupied keep both files.
+        unless (same_inode($id,$h)) {
+            if (S_ISREG($h->[2]) && !entry($dst) && link($held,$dst)) {
+                sync_dir($cache);
+                unlink($held) or die "Fișier străin restaurat; copie protejată la $held\n";
+                sync_dir($state);
+                die "Înlocuire concurentă; indexul nou a fost restaurat.\n";
+            }
+            die "Înlocuire concurentă; păstrat la $held.\n";
+        }
+        donor_bytes($held,1);
+        unlink($held) or die "Eliminare index izolat: $!\n";
+        sync_dir($state);
+    }
+    unlink($receipt) or die "Eliminare chitanță: $!\n";
+    sync_dir($state);
+    print "UNDONE: activarea a fost retrasă.\n";
+}
+
+sub main {
+    die "Utilizare: gg_icon_user.pl status|apply|undo STAGED_INDEX\n"
+        unless @_ == 2 && $_[0] =~ /\A(?:status|apply|undo)\z/ && $_[1] =~ m{\A/[^\0\n]+\z};
+    umask 077;
+    my @console = stat('/dev/console');
+    die "Rulează drept utilizatorul activ al consolei.\n"
+        unless $> != 0 && $> == $< && @console && $console[4] == $>;
+    die "Este necesar MacBookPro9,1 cu Golden 26B131.\n"
+        unless capture('/usr/sbin/sysctl','-n','hw.model') eq 'MacBookPro9,1' &&
+               capture('/usr/bin/sw_vers','-buildVersion') eq '26B131';
+    die "Este necesară pornirea de pe Golden B.\n" unless capture('/bin/bash','-o','pipefail','-c',
+        '/usr/sbin/diskutil info -plist / | /usr/bin/plutil -extract APFSVolumeGroupID raw -o - -') eq GROUP;
+    my $base = capture('/usr/bin/getconf','DARWIN_USER_CACHE_DIR');
+    $base =~ s{/$}{};
+    die "Directorul cache nu a fost identificat.\n" unless $base =~ m{\A/(?:private/)?var/folders/[A-Za-z0-9_-]+/[A-Za-z0-9_-]+/C\z};
+    directory($base,0);
+    my $dir = "$base/com.apple.iconservices";
+    directory($dir,0);
+    my $meta = "$dir/__cache_info__";
+    my $s = entry($meta);
+    die "Metadatele contului lipsesc sau sunt nesigure.\n" unless $s && S_ISREG($s->[2]) && $s->[4] == $> && !($s->[2] & 0022);
+    for my $key (['ProductBuildVersion','26B131'],['language','ro']) {
+        die "Metadatele IconServices nu corespund (26B131/ro).\n"
+            unless capture('/usr/bin/plutil','-extract',$key->[0],'raw','-o','-',$meta) eq $key->[1];
+    }
+    my $home = (getpwuid($>))[7] // die "Director personal indisponibil.\n";
+    apply_or_undo(@_, $dir,"$home/Library/Application Support");
+}
+
+main(@ARGV) unless caller;
+1;

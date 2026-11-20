@@ -1,0 +1,42 @@
+#!/bin/sh
+printf '%s\n' 'Șablon A/B. Completează profilul local înainte de utilizare.' >&2
+exit 78
+# GG_BEGIN_SOURCE
+# Loaded after the launcher's check of the model, build and boot volume group.
+gg_configure_dock() (
+    local owner job old new i helper=${1:-}
+    owner=$(/usr/bin/id -u)
+    [[ $owner == 501 && $(/usr/bin/id -un) == @@GUI_USER@@ && $owner == "$(/usr/bin/stat -f %u /dev/console)" &&
+        ${group:-} == @@UUID_B_GROUP@@ ]] || {
+        echo 'GG_DOCK Sesiunea Golden B a utilizatorului @@GUI_USER@@ nu a fost confirmată.'; return 2;
+    }
+    job="gui/$owner/com.apple.Dock.agent"
+    gg_dock_pid() {
+        /bin/launchctl print "$job" 2>/dev/null | /usr/bin/awk '
+            $1 == "program" && $2 == "=" && $3 == "/System/Library/CoreServices/Dock.app/Contents/MacOS/Dock" {apple=1}
+            $1 == "pid" && $2 == "=" && $3 ~ /^[1-9][0-9]*$/ {pid=$3}
+            END {if (apple && pid) print pid; else exit 1}'
+    }
+    old=$(gg_dock_pid) || { echo 'GG_DOCK Procesul Dock al sesiunii nu a fost identificat.'; return 3; }
+
+    [[ -f $helper && ! -L $helper && -x $helper ]] || {
+        echo 'GG_DOCK Executabilul Intel pentru preferințe este indisponibil.'; return 3;
+    }
+    /usr/bin/perl -e 'alarm 20; exec @ARGV or die $!' "$helper" || {
+        echo "GG_DOCK Aplicarea sau recitirea preferințelor a eșuat (rc=$?)."; return 3;
+    }
+    # This command is explicitly requested when Dock does not respond to the
+    # pointer. Reload the verified session Dock even if its stored keys match.
+    new=$(gg_dock_pid)
+    if [[ $new == "$old" ]]; then
+        /bin/kill -TERM "$old" || { echo 'GG_DOCK Relansarea Dock nu a fost confirmată.'; return 3; }
+    fi
+    for ((i=0; i<30; i++)); do
+        new=$(gg_dock_pid) && [[ $new != "$old" ]] && {
+            echo "GG_DOCK Relansat (PID $new)."; return 0;
+        }
+        /bin/sleep 0.4
+    done
+    echo 'GG_DOCK Preferințele sunt salvate. Relansarea Dock nu a fost confirmată.'
+    return 3
+)

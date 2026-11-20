@@ -1,0 +1,168 @@
+#!/bin/sh
+printf '%s\n' 'Șablon A/B. Completează profilul local înainte de utilizare.' >&2
+exit 78
+# GG_BEGIN_SOURCE
+#!/usr/bin/python3
+"""Scrie imaginea B personalizată pe un disc USB fizic ales în Terminal."""
+import fcntl
+import hashlib
+import json
+import os
+import re
+import runpy
+import stat
+import struct
+import subprocess
+import sys
+import uuid
+import zipfile
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+BASE = HERE.parents[2]
+IMAGE = BASE / ".work/b-kit-staging/@@B_IMAGE_DIRECTORY@@/assembly/target.img"
+REPORT = IMAGE.parent / "GoldenGate-B-personalizare.json"
+# Only use the raw-copy and GPT routines of the tool previously used for image A.
+ARCHIVE = Path("@@STEP13_ARCHIVE@@")
+ENGINE_SHA = "c48b7854cd7fe578735b772cf55274084ce15612a5e71963cd1da1c8dc07823e"
+IMAGE_SHA = "0294ea6d7f7560cdff96f1df877aab926ea17c51b67d9ed550eec74dcdd8757c"
+DISK_UUID = "@@UUID_B_DISK@@"
+GROUP_UUID = "@@UUID_B_GROUP@@"
+SIZE = 80 * 1024 ** 3
+RULES = {"NTFS": "@@UUID_NTFS@@", "exFAT": "@@UUID_EXFAT@@"}
+
+
+def require(ok, message):
+    if not ok:
+        raise ValueError(message)
+
+
+def engine():
+    with zipfile.ZipFile(ARCHIVE) as archive:
+        code = archive.read("HAO-mbp91-step13.py")
+    require(hashlib.sha256(code).hexdigest() == ENGINE_SHA, "Utilitarul de transfer diferă de versiunea verificată.")
+    namespace = {"__name__": "golden_verified_raw", "__file__": str(ARCHIVE)}
+    exec(compile(code, str(ARCHIVE), "exec"), namespace)
+    return namespace
+
+
+def check_source(raw, source):
+    report = json.loads(REPORT.read_text())
+    ident = report["identity"]
+    st = os.fstat(source.fileno())
+    graphics = runpy.run_path(str(HERE / "golden_b_graphics.py"))["verify_graphics"](IMAGE)
+    require(report["status"] == "complete" and report["sha256"] == IMAGE_SHA
+            and report["preboot_verified"] is True and report["noauto"] == RULES
+            and report["graphics"] == graphics and ident["group_uuid"] == GROUP_UUID
+            and ident["disk_uuid"] == DISK_UUID and ident["image"] == str(IMAGE)
+            and ident["inode"] == st.st_ino and ident["birth"] == st.st_birthtime
+            and stat.S_ISREG(st.st_mode) and st.st_uid == 0 and st.st_size == ident["size"] == SIZE,
+            "Imaginea nu corespunde copiei B personalizate.")
+    layout = raw["validate_source_gpt"](lambda offset, n: os.pread(source.fileno(), n, offset), SIZE)
+    require(layout.report()["disk_guid"] == DISK_UUID, "Identitatea GPT a sursei B diferă.")
+    return layout
+
+
+def adapt_disk_end(raw, fd, layout, capacity):
+    # Preserve both partitions. Only the protective MBR and GPT metadata depend on disk size.
+    plan = raw["plan_gpt_relocation"](layout, capacity, 512)
+    for writes in (plan[3:], plan[:3]):
+        for offset, data in writes:
+            raw["_write_all"](fd, data, offset)
+        raw["flush_raw"](fd)
+    raw["validate_relocated_gpt"](lambda off, n: os.pread(fd, n, off), capacity, layout)
+    old_start = layout.backup["entries_lba"] * 512
+    old_end = min(layout.total_bytes, plan[3][0])
+    if old_end > old_start:
+        free_tail = bytes(old_end - old_start)
+        raw["_write_all"](fd, free_tail, old_start)
+        raw["flush_raw"](fd)
+        require(os.pread(fd, len(free_tail), old_start) == free_tail, "Vechiul GPT secundar a rămas pe disc.")
+
+
+def check_open_map(raw, fd, proof):
+    # Opening /dev/rdiskN read-write can retire the published partition and APFS
+    # children. Read the actual table from the descriptor that will receive B.
+    def read_at(offset, size):
+        return os.pread(fd, size, offset)
+
+    header = read_at(512, 512)
+    require(len(header) == 512, "Sectorul 1 al destinației nu a putut fi citit.")
+    is_gpt = proof["scheme"] == "GUID_partition_scheme"
+    require((header[:8] == b"EFI PART") == is_gpt, "Schema de partiții citită de pe USB diferă de cea selectată.")
+    if not is_gpt:
+        return
+    table = raw["_gpt_header"](read_at, 1, proof["size"])
+    actual = {}
+    for index in range(table["entry_count"]):
+        start = index * table["entry_size"]
+        row = table["entries"][start:start + table["entry_size"]]
+        if row[:16] == bytes(16):
+            continue
+        first, last = struct.unpack_from("<QQ", row, 32)
+        node = proof["name"] + "s" + str(index + 1)
+        actual[node] = ((last - first + 1) * 512, str(uuid.UUID(bytes_le=row[16:32])).upper())
+    require(actual.keys() == proof["partitions"].keys(), "Lista partițiilor GPT de pe SSD s-a schimbat.")
+    for node, (size, guid) in proof["partitions"].items():
+        raw_size, raw_guid = actual[node]
+        require(size == raw_size and (not guid or guid == raw_guid),
+                "Dimensiunea sau UUID-ul partiției " + node + " diferă de selecția confirmată.")
+
+
+def write_b():
+    raw = engine()
+    usb = runpy.run_path(str(HERE / "golden_usb_target.py"))
+    lock_path = IMAGE.parent / ".GoldenGate-B-personalizare.lock"
+    with lock_path.open("rb") as lock, os.fdopen(os.open(IMAGE, os.O_RDONLY | os.O_NOFOLLOW), "rb") as source:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        layout = check_source(raw, source)
+        raw["source_detached"](raw["Commands"]({}), IMAGE)
+        name, chosen = usb["select_target"](IMAGE)
+        require(re.fullmatch(r"disk[0-9]+", name), "Identificator USB nevalid.")
+        print("Verific SHA-256 al imaginii B înainte de a scrie.", flush=True)
+        digest = hashlib.sha256()
+        for block in iter(lambda: source.read(8 * 1024 ** 2), b""):
+            digest.update(block)
+        require(digest.hexdigest() == IMAGE_SHA, "Amprenta imaginii sursă diferă.")
+        raw["source_detached"](raw["Commands"]({}), IMAGE)
+        proof = usb["inspect_target"](name, IMAGE)
+        require(proof["fingerprint"] == chosen, "Identitatea discului selectat s-a schimbat.")
+        usb["unmount_target"](name, proof)
+        dev = "/dev/r" + name
+        def progress(phase, done, total):
+            label = "Scriere" if phase == "write" else "Verificare prin recitire"
+            print(f"{label}: {100 * done/total:.1f}%", flush=True)
+        with os.fdopen(os.open(dev, os.O_RDWR | os.O_NOFOLLOW), "r+b", buffering=0) as target:
+            fd = target.fileno()
+            info = os.fstat(fd)
+            require(stat.S_ISCHR(info.st_mode) and info.st_rdev == os.stat(dev).st_rdev,
+                    "Dispozitivul deschis nu este discul raw selectat.")
+            require(raw["device_geometry"](fd) == (512, proof["size"]), "Geometria discului s-a schimbat.")
+            check_open_map(raw, fd, proof)
+            usb["assert_unmounted"](name, proof)
+            print(f"Scriu B pe {name}.", flush=True)
+            result = raw["stream_copy_and_verify"](source.fileno(), fd, SIZE, IMAGE_SHA, progress)
+            raw["validate_raw_restore"](IMAGE_SHA, result["readback_sha256"], SIZE, result["bytes_verified"])
+            if proof["size"] != SIZE:
+                adapt_disk_end(raw, fd, layout, proof["size"])
+            print("Recitire integrală SHA-256 confirmată. Partițiile EFI și APFS sunt verificate.", flush=True)
+        require(usb["live_media_id"](name) == proof["media_id"], "Discul s-a schimbat înainte de ejectare.")
+        subprocess.run(["/usr/sbin/diskutil", "eject", "/dev/" + name], check=True)
+        print("USB B verificat și ejectat. Îl poți muta pe MacBookPro9,1.", flush=True)
+
+
+def main():
+    if len(sys.argv) != 1:
+        sys.exit("Rulează comanda fără argumente.")
+    if os.geteuid() != 0:
+        print("Introdu parola iMac-ului pentru a selecta și scrie discul USB de test.", flush=True)
+        os.execv("/usr/bin/sudo", ["sudo", "--", "/usr/bin/caffeinate", "-im", "/usr/bin/python3",
+                                  "-I", "-B", str(Path(__file__).resolve())])
+    write_b()
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except (OSError, ValueError, RuntimeError, KeyError, subprocess.SubprocessError, zipfile.BadZipFile, EOFError, KeyboardInterrupt) as error:
+        sys.exit("Scriere neconfirmată. " + (str(error) or "Operație întreruptă."))

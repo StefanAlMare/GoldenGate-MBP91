@@ -1,0 +1,196 @@
+#!/bin/sh
+printf '%s\n' 'Șablon A/B. Completează profilul local înainte de utilizare.' >&2
+exit 78
+# GG_BEGIN_SOURCE
+#!/usr/bin/python3
+"""Run two ordered test draws on each GPU of the 26B131 external B installation."""
+import base64
+import hashlib
+import io
+import json
+import os
+from pathlib import Path
+import runpy
+import shlex
+import subprocess
+import sys
+import tarfile
+import tempfile
+
+HERE = Path(__file__).resolve().parent
+OUTPUT = HERE.parents[2] / "outputs"
+FIXTURES = OUTPUT / "GoldenGate-Test-Randare"
+PINS_MODULE = runpy.run_path(str(FIXTURES / "lowered-run.py"))
+BASE = PINS_MODULE["base"]
+PROBE = runpy.run_path(str(HERE / "kepler_ordering.py"))
+MODES = PROBE["MODES"]
+ENCODER = OUTPUT.parent / ".work/b-kit-staging/candidate-kit/hooks/13-golden-gate-metal-framebuffer/inputs/metal_framebuffer/encoder.dylib"
+ENCODER_SHA = "01a7cd6da611e488fb2f2f5a6123f370e014f45bd0c0d227d5b3304d6535dc6c"
+NAMES = {"intel": "Intel HD Graphics 4000", "nvidia": "NVIDIA GeForce GT 650M"}
+REMOTE = r"""
+set -eu -o pipefail
+umask 077
+g=$(/usr/sbin/diskutil info -plist / | /usr/bin/plutil -extract APFSVolumeGroupID raw -o - -)
+[[ "$g" == @@UUID_B_GROUP@@ && $(/usr/sbin/sysctl -n hw.model) == MacBookPro9,1 && $(/usr/bin/sw_vers -buildVersion) == 26B131 ]] || { echo 'Ținta diferă de Golden B pe 9,1.' >&2; exit 2; }
+dir=$(/usr/bin/mktemp -d /private/tmp/GoldenGate-Ordine-Metal.XXXXXXXX)
+trap '/bin/rm -rf "$dir"' EXIT
+trap 'exit 130' HUP INT TERM
+cd "$dir"
+/usr/bin/tar -xzf -
+/usr/bin/shasum -a 256 -c manifest.sha256 >/dev/null
+/usr/bin/tar -xzf metal-python.tar.gz
+display_snapshot() {
+    local rc=0
+    /bin/bash display_reference.sh >display.txt 2>/dev/null || rc=$?
+    printf '{"event":"display","when":"%s","exit":%d,"text":"' "$1" "$rc"
+    /usr/bin/head -c 20000 display.txt | /usr/bin/base64 | /usr/bin/tr -d '\r\n'
+    printf '"}\n'
+}
+finish() {
+    local status=$?
+    trap - EXIT
+    display_snapshot end || true
+    /bin/rm -rf "$dir"
+    exit "$status"
+}
+trap finish EXIT
+display_snapshot start || true
+for key in intel nvidia; do
+    modes=(texture-control original frozen snapshot alias-barrier)
+    if [[ $key == nvidia ]]; then modes+=(author-probe); fi
+    for mode in "${modes[@]}"; do
+        echo "Golden B · $key · $mode" >&2
+        rc=0
+        /usr/bin/perl -e 'alarm 45; exec @ARGV or die $!' "$dir/metal-python/bin/python3.12" -I -S -B kepler_ordering.py "$key" "$mode" >row.json 2>error.log || rc=$?
+        if ((rc==0)); then
+            /bin/cat row.json
+        else
+            printf '{"key":"%s","mode":"%s","status":"INCONCLUSIVE","reason":"Procesul a ieșit cu codul %d."}\n' "$key" "$mode" "$rc"
+            if ((rc==124 || rc==142)); then echo 'Timp expirat. Probele GPU s-au oprit.' >&2; exit 2; fi
+        fi
+    done
+done
+"""
+
+
+def archive():
+    names = PINS_MODULE["PINS"]
+    files = {n: (FIXTURES/n).read_bytes() for n in (*names, "native-metal.py", "lowered-metal.py")}
+    for n, pin in names.items():
+        if hashlib.sha256(files[n]).hexdigest() != pin:
+            raise ValueError("Amprenta diferă pentru " + n)
+    files["encoder.dylib"] = ENCODER.read_bytes()
+    if hashlib.sha256(files["encoder.dylib"]).hexdigest() != ENCODER_SHA:
+        raise ValueError("Amprenta adaptorului de probă diferă de cea a kitului B.")
+    files["kepler_ordering.py"] = (HERE/"kepler_ordering.py").read_bytes()
+    files["display_reference.sh"] = (HERE/"display_reference.sh").read_bytes()
+    files["manifest.sha256"] = "".join(f"{hashlib.sha256(b).hexdigest()}  {n}\n" for n,b in files.items()).encode()
+    data = io.BytesIO()
+    with tarfile.open(fileobj=data,mode="w:gz",compresslevel=1) as tar:
+        for n,b in files.items():
+            entry = tarfile.TarInfo(n)
+            entry.size, entry.mode = len(b), 0o600
+            tar.addfile(entry, io.BytesIO(b))
+    return data.getvalue()
+
+
+def summary(raw, ssh_status):
+    rows = {}
+    displays = {}
+    for line in raw.splitlines():
+        r=json.loads(line)
+        if r.get("event") == "display":
+            phase = r.get("when")
+            if phase in ("start","end"):
+                try:
+                    msg = base64.b64decode(r["text"], validate=True).decode("utf-8", "replace").strip()
+                    if r.get("exit"):
+                        msg += "\nAsocierea ecran–GPU este incompletă."
+                except (ValueError, KeyError, TypeError):
+                    msg = "Captura asocierii ecran–GPU este indisponibilă."
+                displays[phase] = msg
+            continue
+        k,m = r["key"],r["mode"]
+        if k not in NAMES or (m not in MODES and (k,m) != ("nvidia","author-probe")) or (k,m) in rows:
+            raise ValueError("Rând de probă neașteptat.")
+        rows[k,m] = r
+    messages = []
+    for phase, label in (("start","înaintea probelor Metal"), ("end","după probele Metal")):
+        messages.append("Ecrane " + label + "\n" + (displays.get(phase) or "Captură indisponibilă."))
+    controls_valid = True
+    for k,name in NAMES.items():
+        ids = set()
+        passed = {}
+        messages.append(name)
+        for m in (*MODES,"author-probe") if k == "nvidia" else MODES:
+            r = rows.get((k,m), {})
+            valid_id = r.get("name") == name and int(r.get("registryID") or "0",16)>0
+            if valid_id:
+                ids.add(r["registryID"])
+            if r.get("status") == "READBACK" and valid_id:
+                if m == "author-probe" and (r.get("defaultRegistryID") != r["registryID"] or
+                                            r.get("deviceFactoryChanged") is not True):
+                    raise ValueError("Proba adaptorului nu a confirmat GPU-ul implicit și metoda Metal.")
+                if m in ("alias-barrier","frozen","snapshot") and not (
+                    r.get("reflectedTextureName") == "__fbcompat_fb_attachment_0" and
+                    r.get("reflectedTextureType") == "texture" and type(r.get("reflectedTextureIndex")) is int and
+                    0 <= r["reflectedTextureIndex"] < 128):
+                    raise ValueError("Textura din shader nu a fost identificată.")
+                packed = base64.b64decode(r["pixels"], validate=True)
+                count, overlap, worst = PROBE["compare_pixels"](m,packed)
+                passed[m]=count==1024
+                messages.append(f"  {m}: {count}/1024 pixeli, {overlap}/256 în zona comună, abatere maximă {worst}/255")
+            else:
+                messages.append(f"  {m}: {r.get('reason','rezultat indisponibil')}")
+        if len(ids) != 1 or not passed.get("texture-control"):
+            controls_valid = False
+            messages.append("Comparație neconcludentă: identitate sau control prin textură incomplet.")
+        else:
+            messages.append("ID Metal " + next(iter(ids)))
+            if not passed.get("frozen"):
+                messages.append("Controlul cu sursa păstrată a eșuat. Nu se poate atribui rezultatul unei copii separate.")
+            if passed.get("snapshot") and passed.get("frozen"):
+                messages.append("Copia reîmprospătată între desenări reproduce inclusiv a doua culoare.")
+            if passed.get("alias-barrier"):
+                messages.append("Citirea din aceeași textură cu barieră reproduce ambele desenări.")
+            if passed.get("author-probe"):
+                messages.append("Adaptorul precompilat al autorului a procesat shaderul original pe GT 650M în procesul de probă.")
+    if ssh_status or len(rows) != len(MODES)*len(NAMES)+1:
+        messages.append("Sesiune incompletă. Cod SSH " + str(ssh_status) + ".")
+        return messages,2
+    return messages,0 if controls_valid else 2
+
+
+def main():
+    os.umask(0o077)
+    args = sys.argv[1:]
+    data = archive()
+    if args == ["--check"]:
+        subprocess.run(["/bin/bash","-n"],input=REMOTE.encode(),check=True)
+        for m in MODES:
+            assert PROBE["compare_pixels"](m,PROBE["reference"](m))==(1024,256,0)
+        assert PROBE["compare_pixels"]("snapshot",PROBE["reference"]("frozen"))[:2] == (768,0)
+        print("Arhiva, referințele de pixeli și sintaxa comenzii pentru Golden B sunt verificate.")
+        return 0
+    dest=BASE["target_arg"](args or [os.environ.get("GOLDEN_GATE_SSH","@@SSH_TARGET@@")])
+    out=Path(tempfile.mkdtemp(prefix="GoldenGate-Ordine-Metal-",dir=OUTPUT))
+    print("Raport pe iMac:",out,flush=True)
+    try:
+        run=subprocess.run(BASE["SSH"]+[dest,shlex.join(["/bin/bash","-c",REMOTE])],
+                           input=data,stdout=subprocess.PIPE,timeout=630)
+        raw, rc=run.stdout, run.returncode
+    except subprocess.TimeoutExpired as exc:
+        raw, rc=exc.stdout or b"",124
+    (out/"masuratori.ndjson").write_bytes(raw)
+    lines,code=summary(raw,rc)
+    report="\n".join(lines)+"\n"
+    (out/"raport.txt").write_text(report)
+    print(report,flush=True)
+    return code
+
+
+if __name__=="__main__":
+    try:
+        sys.exit(main())
+    except (OSError,ValueError,KeyError,subprocess.SubprocessError) as exc:
+        sys.exit("Proba s-a oprit: "+str(exc))

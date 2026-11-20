@@ -1,0 +1,141 @@
+#!/bin/sh
+printf '%s\n' 'Șablon A/B. Completează profilul local înainte de utilizare.' >&2
+exit 78
+# GG_BEGIN_SOURCE
+# Called as the console user on Golden B. gg_ws_source is the existing native
+# Ruby WindowServer probe. All actions target Finder in that user's session.
+gg_recover_finder() (
+    local account finder agent_job old_pid new_pid agent_pid first second i ws
+    local action=${1:-recover} canonical=/System/Library/CoreServices/iconservicesagent
+    local digest=0c34b609f914b0f1e1e263268528e04715ce59d4de34770cba3af1d40d752de8
+    [[ $action == recover || $action == verify-installed ]] || return 2
+    account=$(/usr/bin/id -u) || return 3
+    [[ $account == 501 && $(/usr/bin/stat -f %u /dev/console) == "$account" &&
+       -n ${gg_ws_source:-} ]] || { echo 'GG_FINDER Sesiunea sau proba WindowServer diferă.'; return 3; }
+    finder=/System/Library/CoreServices/Finder.app
+    agent_job="gui/$account/com.apple.iconservices.iconservicesagent"
+    bounded() { /usr/bin/perl -e 'alarm shift; exec @ARGV or die $!' "$@"; }
+    image_of() {
+        bounded 6 /usr/bin/arch -x86_64 /usr/bin/ruby --disable-gems -rfiddle -e '
+          pid = Integer(ARGV.fetch(0)); buf = Fiddle::Pointer.malloc(4096)
+          f = Fiddle::Function.new(Fiddle::Handle::DEFAULT["proc_pidpath"],
+              [Fiddle::TYPE_INT,Fiddle::TYPE_VOIDP,Fiddle::TYPE_INT],Fiddle::TYPE_INT)
+          exit 2 unless f.call(pid, buf, 4096) > 0
+          puts buf.to_s' "$1"
+    }
+    registered_agent() {
+        bounded 5 /bin/launchctl print "$agent_job" 2>/dev/null |
+            /usr/bin/awk '/^\tpid = [0-9]+$/ {print $3; exit}'
+    }
+    installed_donor() {
+        [[ -f $canonical && ! -L $canonical &&
+           $(/usr/bin/shasum -a 256 "$canonical" | /usr/bin/awk '{print $1}') == "$digest" ]]
+    }
+    agent_ok() {
+        local path volume info group
+        agent_pid=$(registered_agent)
+        [[ $agent_pid =~ ^[1-9][0-9]*$ && $(/bin/ps -p "$agent_pid" -o uid= | /usr/bin/awk '{print $1}') == "$account" ]] || return 1
+        path=$(image_of "$agent_pid") || return 1
+        path=${path#/System/Volumes/Data}
+        if [[ $path == "$canonical" ]]; then
+            installed_donor && [[ $(registered_agent) == "$agent_pid" ]]
+            return $?
+        fi
+        [[ $action == recover ]] || return 1
+        [[ $path == /Volumes/*/System/Library/CoreServices/iconservicesagent && -f $path ]] || return 1
+        volume=${path%/System/Library/CoreServices/iconservicesagent}
+        info=$(bounded 7 /usr/sbin/diskutil info -plist "$volume") || return 1
+        group=$(/usr/bin/plutil -extract APFSVolumeGroupID raw -o - - <<< "$info") || return 1
+        [[ $group == @@UUID_TAHOE_GROUP@@ && $(registered_agent) == "$agent_pid" ]]
+    }
+    finder_pid() {
+        local p path
+        p=$(/usr/bin/pgrep -u "$account" -x Finder) || return 1
+        [[ $p =~ ^[1-9][0-9]*$ ]] || return 1
+        path=$(image_of "$p") || return 1
+        [[ $path -ef "$finder/Contents/MacOS/Finder" ]] || return 1
+        printf '%s\n' "$p"
+    }
+    sample() {
+        local line p=$1
+        line=$(bounded 7 /usr/bin/arch -x86_64 /usr/bin/ruby --disable-gems -e "$gg_ws_source" -- "$p")
+        printf '%s\n' "$line"
+        case "$line" in
+            "GG_FINDER_WS pid=$p state=not_marked") ws=not_marked;;
+            "GG_FINDER_WS pid=$p state=marked_unresponsive") ws=marked_unresponsive;;
+            *) return 1;;
+        esac
+    }
+    pair() {
+        sample "$1" || return 1; first=$ws
+        /bin/sleep 2
+        sample "$1" || return 1; second=$ws
+        [[ $(finder_pid) == "$1" && $first == "$second" ]]
+    }
+    reopen() { bounded 10 /usr/bin/open -a "$finder" "$HOME"; }
+    if [[ $action == verify-installed ]]; then
+        installed_donor || { echo 'GG_FINDER Agentul permanent lipsește din snapshotul pornit.'; return 3; }
+        old_pid=$(finder_pid) || { echo 'GG_FINDER PID Finder indisponibil.'; return 3; }
+        bounded 10 /usr/bin/open -a "$finder" /Applications || return 3
+        for ((i=0;i<8;i++)); do
+            agent_ok && break
+            /bin/sleep 1
+        done
+        agent_ok || { echo 'GG_FINDER Agentul activ de la calea de sistem nu a putut fi confirmat.'; return 3; }
+        echo "GG_FINDER Agent Intel din snapshot confirmat, PID=$agent_pid, SHA256=$digest."
+        pair "$old_pid" && [[ $second == not_marked ]] && agent_ok || {
+            echo 'GG_FINDER Răspunsul Finder după deschiderea dosarului Aplicații rămâne neconfirmat.'
+            return 3
+        }
+        echo "GG_FINDER Cerere pentru Aplicații acceptată, același Finder PID=$old_pid, două citiri fără marcaj de blocare."
+        return 0
+    fi
+    agent_ok || { echo 'GG_FINDER Agentul Tahoe din sesiune nu a putut fi confirmat.'; return 3; }
+    echo "GG_FINDER Agent Tahoe activ PID=$agent_pid."
+    old_pid=$(finder_pid) || { echo 'GG_FINDER Nu am identificat o singură instanță Finder a utilizatorului.'; return 3; }
+    pair "$old_pid" || { echo 'GG_FINDER Starea Finder a variat sau este necunoscută.'; return 3; }
+    if [[ $second == not_marked ]]; then
+        reopen || { echo 'GG_FINDER Cererea de redeschidere a fost refuzată.'; return 3; }
+        pair "$old_pid" || { echo 'GG_FINDER Stare incertă după redeschidere.'; return 3; }
+        if [[ $second == not_marked ]]; then
+            echo "GG_FINDER Cerere de deschidere acceptată. Finder PID=$old_pid, două citiri fără marcaj."
+            return 0
+        fi
+    fi
+    [[ $(finder_pid) == "$old_pid" ]] && agent_ok || return 3
+    echo "GG_FINDER Cer închiderea normală a Finder PID=$old_pid."
+    bounded 9 /usr/bin/arch -x86_64 /usr/bin/osascript -l JavaScript - "$old_pid" <<'GG_FINDER_TERM'
+ObjC.import("AppKit")
+function run(args) {
+    var pid = Number(args[0])
+    var app = $.NSRunningApplication.runningApplicationWithProcessIdentifier(pid)
+    if (Number(app.processIdentifier) !== pid || ObjC.unwrap(app.bundleIdentifier) !== "com.apple.finder" ||
+        ObjC.unwrap(app.executableURL.path) !== "/System/Library/CoreServices/Finder.app/Contents/MacOS/Finder") {
+        throw Error("Finder nu mai corespunde procesului inițial.")
+    }
+    if (!app.terminate) throw Error("Finder a refuzat închiderea normală.")
+}
+GG_FINDER_TERM
+    if [[ $? != 0 ]]; then echo 'GG_FINDER Închiderea normală a eșuat. Verifică Finder pe ecran.'; return 3; fi
+    for ((i=0;i<12;i++)); do
+        [[ -z $(/bin/ps -p "$old_pid" -o pid=) ]] && break
+        /bin/sleep 1
+    done
+    if [[ -n $(/bin/ps -p "$old_pid" -o pid=) ]]; then
+        echo 'GG_FINDER Finder rulează încă. Verifică dacă are o copiere sau un dialog deschis.'
+        return 3
+    fi
+    reopen || { echo 'GG_FINDER LaunchServices a refuzat să deschidă Finder.'; return 3; }
+    for ((i=0;i<10;i++)); do
+        new_pid=$(finder_pid) && [[ $new_pid != "$old_pid" ]] && break
+        /bin/sleep 1
+    done
+    [[ -n $new_pid && $new_pid != "$old_pid" ]] || { echo 'GG_FINDER Nu am confirmat noul proces Finder.'; return 3; }
+    /bin/sleep 3
+    if pair "$new_pid" && [[ $second == not_marked ]] && agent_ok; then
+        echo "GG_FINDER Relansat PID=$old_pid → $new_pid. Două citiri fără marcaj. Agent Tahoe PID=$agent_pid."
+        return 0
+    fi
+    echo "GG_FINDER PID nou $new_pid. Revenirea interfeței nu a putut fi confirmată."
+    return 3
+)

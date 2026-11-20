@@ -1,0 +1,128 @@
+#!/bin/sh
+printf '%s\n' 'Șablon A/B. Completează profilul local înainte de utilizare.' >&2
+exit 78
+# GG_BEGIN_SOURCE
+#!/usr/bin/python3
+"""Retrage imaginea finală A și, opțional, două copii recuperabile din IPSW."""
+import argparse
+import hashlib
+import json
+import os
+from pathlib import Path
+import plistlib
+import shutil
+import stat
+import subprocess
+import tempfile
+import zipfile
+
+PROJECT = Path(__file__).resolve().parents[3]
+STORE = Path("@@HAO_STORE@@")
+A = STORE / "artifacts/mbp91-golden-image-26B131-step12-20261118-215319-854607/GoldenGate-mbp91-26B131.img"
+A_SHA = "52a930a84a37b3fdd3443636426503c716e723f7c781332d605f964ad3922f35"
+IPSW = STORE / "inputs/ipsw-27.2.1-26B131/UniversalMac_27.2.1_26B131_Restore.ipsw"
+SOURCES = STORE / "artifacts/golden-gate-userspace-26B131-20261111-233e85a09887/sources"
+MEMBERS = {"141-12228-174.dmg.aea": 11274289152, "141-12293-176.dmg.aea": 2415919104}
+CHUNK = 8 * 1024**2
+
+
+def identity(path):
+    info = path.lstat()
+    if path.resolve() != path or not stat.S_ISREG(info.st_mode):
+        raise ValueError(f"cale diferită de fișierul obișnuit așteptat: {path}")
+    return info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns
+
+
+def digest(stream):
+    hasher = hashlib.sha256()
+    for block in iter(lambda: stream.read(CHUNK), b""):
+        hasher.update(block)
+    return hasher.hexdigest()
+
+
+def verify_a():
+    record = json.loads((A.parent / "build.json").read_bytes())
+    if record["image_sha256"] != A_SHA or record["image_size_bytes"] != 80 * 1024**3:
+        raise ValueError("bonul imaginii A are alte valori")
+    if A.stat().st_size != record["image_size_bytes"]:
+        raise ValueError("dimensiunea imaginii A diferă de bon")
+    with A.open("rb") as stream:
+        if digest(stream) != A_SHA:
+            raise ValueError("conținutul imaginii A diferă de bon")
+    return A_SHA, "build.json și kitul de asamblare păstrate"
+
+
+def verify_member(path):
+    before = identity(IPSW)
+    with zipfile.ZipFile(IPSW) as image:
+        entries = [e for e in image.infolist() if e.filename == path.name]
+        if len(entries) != 1 or entries[0].file_size != MEMBERS[path.name] or path.stat().st_size != entries[0].file_size:
+            raise ValueError("membrul IPSW sau dimensiunea diferă")
+        with image.open(entries[0]) as original, path.open("rb") as copy:
+            hasher = hashlib.sha256()
+            while True:
+                data = copy.read(CHUNK)
+                if original.read(CHUNK) != data:
+                    raise ValueError("copia diferă de originalul din IPSW")
+                if not data:
+                    break
+                hasher.update(data)
+    if identity(IPSW) != before:
+        raise ValueError("IPSW-ul s-a schimbat în timpul citirii")
+    return hasher.hexdigest(), f"{IPSW.name} / {path.name}"
+
+
+def require_detached(path):
+    info = plistlib.loads(subprocess.check_output(["/usr/bin/hdiutil", "info", "-plist"]))
+    for image in info["images"]:
+        for field in ("image-path", "shadow-path"):
+            if image.get(field) and Path(image[field]).resolve() == path:
+                raise ValueError("imagine atașată")
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("mod", choices=("verifica", "retrage-a", "elibereaza"))
+    args = parser.parse_args()
+    paths = [A] if args.mod == "retrage-a" else [A, *(SOURCES / name for name in MEMBERS)]
+    for required in (STORE / "artifacts/mbp91-assembly-kit-26B131-step12-20261118-200221-114333/kit.json",
+                     A.parent / "boot-efi.zip", PROJECT / ".work/b-kit-staging/@@B_IMAGE_DIRECTORY@@/assembly/target.img"):
+        identity(required)
+    # Un bon nou este creat la fiecare rulare. Păstrează inclusiv rezultatele unei rulări întrerupte.
+    folder = Path(tempfile.mkdtemp(prefix="Golden-Retragere-A-", dir=PROJECT / "outputs"))
+    before = shutil.disk_usage(STORE).free
+    failures = 0
+    with (folder / "raport.jsonl").open("x", encoding="utf-8") as log:
+        def report(**entry):
+            print(json.dumps(entry, ensure_ascii=False), flush=True)
+            log.write(json.dumps(entry, ensure_ascii=False) + "\n")
+            log.flush()
+            os.fsync(log.fileno())
+        print("Raport:", log.name, flush=True)
+        report(mod=args.mod, liber_inainte=before)
+        for path in paths:
+            try:
+                if not path.exists() and not path.is_symlink():
+                    report(fisier=path.name, stare="deja absent")
+                    continue
+                start = identity(path)
+                print("Verific", path.name, "…", flush=True)
+                sha, source = verify_a() if path == A else verify_member(path)
+                require_detached(path)
+                if identity(path) != start:
+                    raise ValueError("fișierul s-a schimbat în timpul citirii")
+                report(fisier=str(path.relative_to(STORE)), octeti=start[2], sha256=sha,
+                       referinta=source, stare="verificat")
+                if args.mod != "verifica":
+                    path.unlink()
+                    report(fisier=path.name, stare="șters")
+            except (OSError, ValueError, KeyError, zipfile.BadZipFile, subprocess.SubprocessError) as error:
+                report(fisier=path.name, eroare=str(error))
+                failures += 1
+        after = shutil.disk_usage(STORE).free
+        report(liber_dupa=after, diferenta_spatiu_liber_octeti=after-before, erori=failures)
+    return int(failures > 0)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

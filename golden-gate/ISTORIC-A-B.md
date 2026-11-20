@@ -63,3 +63,4 @@ Pentru a izola influența bibliotecilor grafice, B a păstrat driverele ambelor 
 | Comparația A/B, probele grafice și pictogramele după login | [Fișa tehnică în română](https://github.com/StefanAlMare/GoldenGate-MBP91/blob/6ba34ef2f16e9442783ee9fbb724366673465670/docs/mbp91-kepler-imaging-test.ro.md) |
 | Proba experimentală pentru framebuffer și alegerea GPU-ului | [Sursa și instrucțiunile probei](../patches/golden-gate-metal-framebuffer/build/README.md) |
 | Rezultatele fiecărei intervenții, probele negative și cele 29 de rapoarte identificate prin SHA-256 | [Registrul tehnic B](REGISTRU-TEHNIC-B.md) |
+| Sursele probelor pentru Finder, Dock, ferestre, baterie și volume | [Ghidul probelor și șabloanelor A/B](PROBE-A-B.md) |

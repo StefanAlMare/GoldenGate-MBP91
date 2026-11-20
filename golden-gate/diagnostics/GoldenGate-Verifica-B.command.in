@@ -1,0 +1,134 @@
+#!/bin/sh
+printf '%s\n' 'Șablon A/B. Completează profilul local înainte de utilizare.' >&2
+exit 78
+# GG_BEGIN_SOURCE
+#!/usr/bin/python3
+"""Verificare în regim de citire a imaginii locale B deja asamblate."""
+import json
+import os
+import plistlib
+import re
+import subprocess
+import sys
+import tempfile
+import uuid
+from contextlib import contextmanager
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[3]
+IMAGE = ROOT / ".work/b-kit-staging/@@B_IMAGE_DIRECTORY@@/assembly/target.img"
+GROUP = "@@UUID_B_GROUP@@"
+DISK_GUID = "@@UUID_B_DISK@@"
+WANTED = {"NTFS": "@@UUID_NTFS@@",
+          "exFAT": "@@UUID_EXFAT@@"}
+HDI = "/usr/bin/hdiutil"
+DISK = "/usr/sbin/diskutil"
+
+
+def run(*args):
+    result = subprocess.run(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    if result.returncode:
+        msg = (result.stderr or result.stdout).decode(errors="replace").strip()
+        raise RuntimeError(f"{Path(args[0]).name} {args[1]}: {msg[:350]}")
+    return result.stdout
+
+
+def plist(*args):
+    return plistlib.loads(run(*args))
+
+
+def only(seq, message):
+    seq = list(seq)
+    if len(seq) != 1:
+        raise RuntimeError(message)
+    return seq[0]
+
+
+@contextmanager
+def attached(image_path=None):
+    image_path = IMAGE if image_path is None else image_path
+    for image in plist(HDI, "info", "-plist").get("images", []):
+        if Path(image.get("image-path", "")).resolve() == image_path:
+            raise RuntimeError("Imaginea este deja atașată. Închide montarea anterioară înainte de verificare.")
+    entities = plist(HDI, "attach", "-readonly", "-nomount", "-nobrowse", "-imagekey",
+                     "diskimage-class=CRawDiskImage", "-plist", image_path)["system-entities"]
+    device = only((e["dev-entry"] for e in entities if e.get("content-hint") == "GUID_partition_scheme"
+                   and re.fullmatch(r"/dev/disk\d+", e.get("dev-entry", ""))), "Discul GPT al imaginii nu este identificabil.")
+    try:
+        yield Path(device).name
+    finally:
+        run(HDI, "detach", device)
+
+
+def volume(container, role):
+    entry = only((v for v in container["Volumes"] if role in v.get("Roles", [])),
+                 f"Rolul APFS {role} lipsește sau este ambiguu.")
+    node = entry["DeviceIdentifier"]
+    if not re.fullmatch(re.escape(container["ContainerReference"]) + r"s\d+", node):
+        raise RuntimeError(f"Identitate neașteptată pentru rolul {role}.")
+    return node
+
+
+@contextmanager
+def mounted(node, directory):
+    directory.mkdir()
+    run(DISK, "mount", "readOnly", "-mountPoint", directory, node)
+    try:
+        info = plist(DISK, "info", "-plist", node)
+        if Path(info.get("MountPoint", "")).resolve() != directory.resolve() or not (os.statvfs(directory).f_flag & os.ST_RDONLY):
+            raise RuntimeError("Montare în regim de citire neconfirmată.")
+        yield directory
+    finally:
+        run(DISK, "unmount", node)
+
+
+def check_rules(fstab):
+    if not fstab.is_file():
+        print("Data/private/etc/fstab: absent. Lipsesc ambele reguli noauto.")
+        return False
+    rows = [line.partition("#")[0].split() for line in fstab.read_text().splitlines()]
+    good = True
+    for name, target in WANTED.items():
+        found = [r for r in rows if r and r[0].upper() == "UUID=" + target]
+        ok = (len(found) == 1 and len(found[0]) == 6 and found[0][1:3] == ["none", "auto"]
+              and {"ro", "noauto"} <= set(found[0][3].split(",")) and not {"rw","auto"} & set(found[0][3].split(","))
+              and found[0][4:] == ["0", "0"])
+        print(f"Regula {name}: {'confirmată' if ok else 'lipsește, este duplicată sau diferă'}.")
+        good &= ok
+    return good
+
+
+def check():
+    if len(sys.argv) != 1 or IMAGE.is_symlink() or IMAGE.stat().st_size != 80 * 1024**3:
+        raise RuntimeError("Este acceptată numai imaginea B locală de 80 GiB.")
+    build = json.loads((IMAGE.parent / "work/build.json").read_text())
+    with IMAGE.open("rb") as stream:
+        stream.seek(512)
+        head = stream.read(92)
+    if (build.get("status") != "assembled" or build.get("group_uuid") != GROUP or
+        head[:8] != b"EFI PART" or str(uuid.UUID(bytes_le=head[56:72])).upper() != DISK_GUID):
+        raise RuntimeError("Identitatea imaginii B diferă de asamblarea verificată.")
+    print(f"Imagine B: 80 GiB, GPT {DISK_GUID}.", flush=True)
+    with attached() as device, tempfile.TemporaryDirectory(prefix="GoldenGate-Verifica-B.") as tmp:
+        container = only((c for c in plist(DISK, "apfs", "list", "-plist")["Containers"]
+                          if [p.get("DeviceIdentifier") for p in c.get("PhysicalStores", [])] == [device+"s2"]),
+                         "Containerul APFS al imaginii nu a putut fi identificat.")
+        roles = ["System","Data","Preboot","Recovery","VM"]
+        devices = {r:volume(container,r) for r in roles}
+        print("Roluri APFS confirmate:", ", ".join(devices))
+        with mounted(devices["Data"], Path(tmp)/"data") as data:
+            rules_ok = check_rules(data/"private/etc/fstab")
+        with mounted(devices["Preboot"], Path(tmp)/"preboot") as preboot:
+            loader = preboot/GROUP/"System/Library/CoreServices/boot.efi"
+            boot_ok = loader.is_file() and loader.stat().st_size > 0
+            print(f"Preboot/{GROUP}/System/Library/CoreServices/boot.efi: {'prezent' if boot_ok else 'absent'}.")
+    print("Imagine detașată.")
+    return 0 if rules_ok and boot_ok else 3
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(check())
+    except (RuntimeError, OSError, ValueError, KeyError) as err:
+        print("Verificare incompletă:", err, file=sys.stderr)
+        sys.exit(2)

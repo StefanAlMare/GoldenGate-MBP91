@@ -1,0 +1,355 @@
+#!/bin/sh
+printf '%s\n' 'Șablon A/B. Completează profilul local înainte de utilizare.' >&2
+exit 78
+# GG_BEGIN_SOURCE
+#!/usr/bin/perl
+use strict;
+use warnings;
+use Fcntl qw(:DEFAULT :flock :mode O_DIRECTORY O_NOFOLLOW O_NONBLOCK);
+use Errno qw(ENOENT EEXIST);
+use Digest::SHA qw(sha256_hex);
+use Cwd qw(realpath);
+use IO::Handle;
+
+# The on-disk protocol is one immutable manifest and one private hardlink per
+# unit we publish. A matching name or digest alone never authorizes deletion.
+my $pin = 'b41fb48f7e62ede55447339cc32f1c0cbfd23ba24bcbbd6395c9fd8f013d9fc0';
+my $uuid = qr/[A-F0-9]{8}(?:-[A-F0-9]{4}){3}-[A-F0-9]{12}/;
+
+sub output_of {
+    open my $h, '-|', @_ or die "Pornirea comenzii a eșuat: $!\n";
+    local $/;
+    my $out = <$h> // '';
+    close $h or die "Verificare indisponibilă: $_[0]\n";
+    $out =~ s/\s+\z//;
+    return $out;
+}
+
+sub target {
+    die "Necesită administrator pe Golden B.\n" unless $> == 0;
+    my $uid = (stat '/dev/console')[4];
+    die "Sesiunea de la desktop diferă.\n" unless defined($uid) && $uid == 501 && (getpwuid($uid) // '') eq '@@GUI_USER@@';
+    die "Modelul sau buildul diferă.\n"
+        unless output_of('/usr/sbin/sysctl','-n','hw.model') eq 'MacBookPro9,1'
+            && output_of('/usr/bin/sw_vers','-buildVersion') eq '26B131';
+    my $group = output_of('/bin/bash','-o','pipefail','-c',
+        '/usr/sbin/diskutil info -plist / | /usr/bin/plutil -extract APFSVolumeGroupID raw -o - -');
+    die "Oprit: alt grup APFS.\n" unless $group eq '@@UUID_B_GROUP@@';
+    my $cache = output_of('/usr/bin/sudo','-n','-H','-u',"#$uid",'--','/usr/bin/getconf','DARWIN_USER_CACHE_DIR');
+    $cache =~ s{/\z}{};
+    $cache =~ s{^/var/}{/private/var/};
+    die "Cale neașteptată pentru cache-ul utilizatorului.\n"
+        unless $cache =~ m{\A/private/var/folders/[A-Za-z0-9_]{2}/[A-Za-z0-9_-]+/C\z}
+            && (realpath($cache) // '') eq $cache && (stat $cache)[4] == $uid;
+    my ($store_uid,$gid) = ((getpwnam('_iconservices'))[2],(getgrnam('admin'))[2]);
+    die "Identitatea locală IconServices diferă.\n" unless defined($store_uid) && $store_uid == 240 && defined($gid) && $gid == 80;
+    my $store = '/Library/Caches/com.apple.iconservices.store';
+    my $metadata = "$store/store-info.plist";
+    directory($store, $store_uid);
+    my @meta = lstat $metadata;
+    die "Metadate IconServices nevalide.\n" unless @meta && S_ISREG($meta[2]) && $meta[4] == $store_uid
+        && output_of('/usr/bin/plutil','-extract','version','raw','-o','-',$metadata) eq '4'
+        && output_of('/usr/bin/plutil','-extract','language','raw','-o','-',$metadata) eq 'ro';
+    return {store=>$store, journal=>'/private/var/db/golden-gate-icon-units-b-v1', owner=>0,
+            store_uid=>$store_uid, gid=>$gid, uid=>$uid, cache=>$cache, pin=>$pin, count=>228, total=>333354992};
+}
+
+sub directory {
+    my ($path,$owner) = @_;
+    my @st = lstat $path;
+    die "Directorul nu a trecut verificarea: $path\n"
+        unless @st && S_ISDIR($st[2]) && $st[4] == $owner && !($st[2]&0022) && (realpath($path)//'') eq $path;
+    return @st;
+}
+
+sub stat_entry {
+    my ($p) = @_;
+    my @st = lstat $p;
+    die "lstat $p: $!\n" unless @st || $! == ENOENT;
+    return @st;
+}
+
+sub open_regular {
+    my ($path,$limit,$exact) = @_;
+    sysopen my $h,$path,O_RDONLY|O_NOFOLLOW|O_NONBLOCK or die "Citire $path: $!\n";
+    my @s = stat $h;
+    die "Fișier nevalid: $path\n" unless @s && S_ISREG($s[2]) && $s[7] <= $limit && (!$exact || $s[7] == $limit);
+    return $h;
+}
+
+sub small_file {
+    my ($path,$limit) = @_;
+    my $h = open_regular($path,$limit,0);
+    my $n = sysread($h,my $bytes,$limit+1);
+    die "Citire incompletă: $path\n" unless defined($n) && $n == (stat $h)[7] && $n <= $limit;
+    return $bytes;
+}
+
+sub manifest {
+    my ($c,$bytes) = @_;
+    die "Amprenta manifestului diferă.\n" unless sha256_hex($bytes) eq $c->{pin};
+    my (%items,$total,$last);
+    for my $line (split /\n/,$bytes) {
+        my ($name,$size,$sha) = $line =~ /\A($uuid\.isdata)\t([1-9][0-9]*)\t([a-f0-9]{64})\z/;
+        die "Manifest invalid.\n" unless defined($sha) && (!defined($last) || $last lt $name);
+        $items{$name} = [0+$size,$sha];
+        $last = $name; $total += $size;
+    }
+    die "Inventar incomplet.\n" unless keys(%items) == $c->{count} && $total == $c->{total};
+    return \%items;
+}
+
+sub sync_dir {
+    sysopen my $h,$_[0], O_RDONLY|O_DIRECTORY|O_NOFOLLOW or die "Deschidere director: $!\n";
+    $h->sync or die "Sincronizare director: $!\n";
+}
+
+sub atomic_text {
+    my ($dir,$name,$bytes) = @_;
+    my $tmp = "$dir/$name.part";
+    unlink $tmp or die "$tmp: $!\n" if stat_entry($tmp);
+    sysopen my $f,$tmp,O_WRONLY|O_CREAT|O_EXCL|O_NOFOLLOW,0600 or die "$tmp: $!\n";
+    print {$f} $bytes or die "Scriere $tmp: $!\n";
+    $f->flush && $f->sync && close($f) or die "Sincronizare $tmp: $!\n";
+    rename $tmp,"$dir/$name" or die "Publicare $name: $!\n";
+    sync_dir($dir);
+}
+
+sub verify_unit {
+    my ($path,$row) = @_;
+    my $h = open_regular($path,$row->[0],1);
+    my @before = stat $h;
+    my $sha = Digest::SHA->new(256)->addfile($h)->hexdigest;
+    my @now = lstat $path;
+    die "Unitatea diferă ori s-a schimbat: $path\n"
+        unless $sha eq $row->[1] && @now && $now[0] == $before[0] && $now[1] == $before[1] && $now[7] == $before[7];
+}
+
+sub stage_input {
+    my ($c,$stage) = @_;
+    die "Directorul sursă trebuie specificat printr-o cale absolută.\n" unless $stage =~ m{\A/};
+    sysopen my $s,$stage,O_RDONLY|O_DIRECTORY|O_NOFOLLOW or die "Director sursă: $!\n";
+    my @s = stat $s;
+    die "Directorul sursă trebuie să fie privat.\n"
+        unless ($s[4] == $c->{uid} || $s[4] == $c->{owner}) && !($s[2]&0077);
+    chdir $s or die "chdir: $!\n";
+    my $bytes = small_file('manifest.tsv',65536);
+    my $items = manifest($c,$bytes);
+    sysopen my $units,'units',O_RDONLY|O_DIRECTORY|O_NOFOLLOW or die "Director units: $!\n";
+    chdir $units or die "chdir units: $!\n";
+    # Subsequent untrusted-source opens are relative to this pinned directory FD.
+    verify_unit($_,$items->{$_}) for sort keys %$items;
+    return ($bytes,$items);
+}
+
+sub guard_index_absent {
+    my ($c) = @_;
+    my $d = "$c->{cache}/com.apple.iconservices";
+    my @s = stat_entry($d);
+    return unless @s;
+    directory($d,$c->{uid});
+    die "Indexul utilizatorului există. Unitățile comune sunt păstrate; restabilește întâi indexul.\n"
+        if stat_entry("$d/store.index");
+}
+
+sub same_inode {
+    my ($a,$b) = @_;
+    return @$a && @$b && S_ISREG($a->[2]) && S_ISREG($b->[2]) && $a->[0] == $b->[0] && $a->[1] == $b->[1];
+}
+
+sub copy_private {
+    my ($c,$name,$row,$pool) = @_;
+    my $tmp = "$pool/unit.partial";
+    unlink($tmp) or die "Ștergere parțială: $!\n" if stat_entry($tmp);
+    my $src = open_regular($name,$row->[0],1);
+    sysopen my $dst,$tmp,O_WRONLY|O_CREAT|O_EXCL|O_NOFOLLOW,0600 or die "$tmp: $!\n";
+    my ($total,$dig) = (0,Digest::SHA->new(256));
+    while (1) {
+        my $n=sysread($src,my $buf,262144);
+        die "Citire $name: $!\n" unless defined $n;
+        last unless $n;
+        $total += $n; die "Sursă schimbată.\n" if $total > $row->[0];
+        $dig->add($buf);
+        print {$dst} $buf or die "Scriere $name: $!\n";
+    }
+    die "Amprentă nevalidă la copiere: $name\n" unless $total == $row->[0] && $dig->hexdigest eq $row->[1];
+    $dst->flush or die "flush: $!\n";
+    my @s = stat $dst;
+    chown($c->{store_uid},$c->{gid},$tmp) == 1 or die "chown: $!\n" unless $s[4] == $c->{store_uid} && $s[5] == $c->{gid};
+    chmod(0644,$tmp) == 1 or die "chmod: $!\n";
+    $dst->sync && close($dst) or die "Sincronizare $name: $!\n";
+    rename($tmp,"$pool/$name") or die "Publicare privată: $!\n";
+}
+
+sub prepare {
+    my ($c,$state,$stage) = @_;
+    die "Terminarea revenirii este necesară.\n" if $state eq 'reverting' || $state eq 'withdrawn';
+    my ($bytes,$items) = stage_input($c,$stage);
+    my $j=$c->{journal}; my $pool="$j/units";
+    guard_index_absent($c) unless $state eq 'ready';
+    for my $name (sort keys %$items) {
+        my $p="$c->{store}/$name";
+        verify_unit($p,$items->{$name}) if stat_entry($p);
+    }
+    if ($state ne 'ready') {
+        atomic_text($j,'manifest.tsv',$bytes);
+        atomic_text($j,'state',"preparing\n");
+    }
+    my $added=0;
+    for my $name (sort keys %$items) {
+        my $dest="$c->{store}/$name"; my $owned="$pool/$name";
+        next if stat_entry($dest);
+        if (stat_entry($owned)) { verify_unit($owned,$items->{$name}) }
+        else { copy_private($c,$name,$items->{$name},$pool) }
+        # The rollback handle must reach disk before exposing its second name.
+        sync_dir($pool);
+        guard_index_absent($c);
+        if (link($owned,$dest)) { $added++ }
+        elsif ($! == EEXIST) { verify_unit($dest,$items->{$name}) }
+        else { die "Publicare $name: $!\n" }
+    }
+    sync_dir($c->{store});
+    verify_unit("$c->{store}/$_",$items->{$_}) for sort keys %$items;
+    atomic_text($j,'state',"ready\n");
+    print "GG_STORE_ADDED $added\n";
+    print "Unități verificate integral: $c->{count}. Publicate în această rulare: $added.\n";
+}
+
+sub report_rollback {
+    my ($removed,$retained) = @_;
+    print "GG_STORE_REMOVED $removed\nGG_STORE_RETAINED $retained\n";
+    print "Unități retrase: $removed. Înlocuiri păstrate: $retained.\n";
+}
+
+sub restore_withdrawals {
+    my ($c,$pool,$items) = @_;
+    my @errors;
+    for my $name (sort keys %$items) {
+        my $held="$pool/$name.withdraw"; my $dest="$c->{store}/$name";
+        my @held=stat_entry($held); next unless @held;
+        # Publish the actual quarantined inode, including a foreign regular
+        # file that raced the rename. Never overwrite a newer occupant.
+        eval {
+            die "Obiect neașteptat salvat la $held.\n" unless S_ISREG($held[2]);
+            unless (link($held,$dest)) {
+                my @current=stat_entry($dest);
+                die "Conflict: versiunea retrasă este păstrată la $held.\n" unless same_inode(\@held,\@current);
+            }
+            sync_dir($c->{store});
+            unlink($held) or die "Curățare $held: $!\n";
+            sync_dir($pool);
+            1;
+        } or push @errors,$@;
+    }
+    die join('',@errors) if @errors;
+}
+
+sub rollback {
+    my ($c,$state) = @_;
+    if ($state eq 'none' || $state eq 'rolled-back') { report_rollback(0,0); return }
+    my $j=$c->{journal}; my $pool="$j/units";
+    my $items=manifest($c,small_file("$j/manifest.tsv",65536));
+    if ($state ne 'withdrawn') {
+        # A former interrupted withdrawal may need restoration even if the
+        # user index is now active. Keep every moved file until the final check.
+        guard_index_absent($c) unless $state eq 'reverting';
+        atomic_text($j,'state',"reverting\n");
+        my ($removed,$retained)=(0,0);
+        my $ok=eval {
+            guard_index_absent($c);
+            for my $name (sort keys %$items) {
+                my $owned="$pool/$name"; my $dest="$c->{store}/$name";
+                my @a=stat_entry($owned); next unless @a;
+                die "Jurnal nevalid: $owned\n" unless S_ISREG($a[2]);
+                my $held="$pool/$name.withdraw";
+                my @held=stat_entry($held);
+                if (!@held) {
+                    my @b=stat_entry($dest);
+                    if (same_inode(\@a,\@b)) {
+                        verify_unit($dest,$items->{$name});
+                        guard_index_absent($c);
+                        # Verify the inode actually moved, even if the daemon
+                        # replaces the public name immediately before rename.
+                        if (rename($dest,$held)) { sync_dir($pool); sync_dir($c->{store}) }
+                        elsif ($! != ENOENT) { die "Retragere $name: $!\n" }
+                        @held=stat_entry($held);
+                    } elsif (@b) { $retained++ }
+                }
+                if (@held) {
+                    die "Unitate înlocuită în timpul revenirii: $name\n" unless same_inode(\@a,\@held);
+                    verify_unit($held,$items->{$name});
+                    $removed++;
+                }
+            }
+            guard_index_absent($c);
+            atomic_text($j,'withdrawn-counts',"$removed $retained\n");
+            1;
+        };
+        if (!$ok) {
+            my $why=$@;
+            restore_withdrawals($c,$pool,$items);
+            die $why;
+        }
+        # No further public store changes are needed after the commit point.
+        atomic_text($j,'state',"withdrawn\n");
+    }
+    my ($removed,$retained)=small_file("$j/withdrawn-counts",64) =~ /\A(\d+) (\d+)\n\z/;
+    die "Contori nevalizi în jurnal.\n" unless defined($removed) && $removed+$retained <= $c->{count};
+    for my $name (sort keys %$items) {
+        for my $p ("$pool/$name.withdraw","$pool/$name") {
+            unlink($p) or die "Curățare $p: $!\n" if stat_entry($p);
+        }
+    }
+    unlink("$pool/unit.partial") or die "Ștergere parțială: $!\n" if stat_entry("$pool/unit.partial");
+    sync_dir($pool);
+    atomic_text($j,'state',"rolled-back\n");
+    report_rollback($removed,$retained);
+}
+
+sub transact {
+    my ($c,$op,$stage) = @_;
+    my $j=$c->{journal}; my $pool="$j/units";
+    if (!stat_entry($j)) {
+        if ($op ne 'prepare') {
+            if ($op eq 'status') { print "GG_STORE_STATE absent\nStare unități: none\n" }
+            else { report_rollback(0,0) }
+            return;
+        }
+        mkdir($j,0700) or $! == EEXIST or die "Creare jurnal: $!\n";
+        (my $parent=$j) =~ s{/[^/]+\z}{};
+        sync_dir($parent);
+    }
+    my @d=directory($j,$c->{owner});
+    die "Jurnalul trebuie să fie privat.\n" if $d[2]&0077;
+    sysopen my $lock,$j,O_RDONLY|O_DIRECTORY|O_NOFOLLOW or die "Jurnal: $!\n";
+    flock($lock,$op eq 'status' ? LOCK_SH : LOCK_EX) or die "Blocare jurnal: $!\n";
+    my $state=stat_entry("$j/state") ? small_file("$j/state",128) : "none\n"; chomp $state;
+    die "Stare necunoscută: $state\n" unless $state =~ /\A(?:none|preparing|ready|reverting|withdrawn|rolled-back)\z/;
+    if ($state ne 'none' && $state ne 'rolled-back') {
+        manifest($c,small_file("$j/manifest.tsv",65536));
+        my @u=directory($pool,$c->{owner});
+        die "Jurnalul de unități nu este privat.\n" if $u[2]&0077;
+    }
+    if ($op eq 'status') {
+        my $value=$state eq 'ready' ? 'ready' : $state =~ /^(none|rolled-back)$/ ? 'absent' : 'partial';
+        print "GG_STORE_STATE $value\nStare unități: $state\n"; return
+    }
+    if (!stat_entry($pool)) {
+        mkdir($pool,0700) or die "Creare jurnal de unități: $!\n";
+        sync_dir($j);
+    }
+    my @p=directory($pool,$c->{owner});
+    die "Directorul de unități al jurnalului trebuie privat.\n" if $p[2]&0077;
+    die "Jurnalul și depozitul nu sunt pe același volum.\n" if $p[0] != (stat($c->{store}))[0];
+    if ($op eq 'rollback') { rollback($c,$state) }
+    else { prepare($c,$state,$stage) }
+}
+
+unless (caller) {
+    umask 0077;
+    my ($op,$stage)=@ARGV;
+    die "Utilizare: prepare STAGE_DIR | status | rollback\n" unless defined($op) &&
+        (($op eq 'prepare' && @ARGV==2) || ($op =~ /\A(?:rollback|status)\z/ && @ARGV==1));
+    transact(target(),$op,$stage);
+}
+1;

@@ -1,0 +1,540 @@
+#!/bin/sh
+printf '%s\n' 'Șablon A/B. Completează profilul local înainte de utilizare.' >&2
+exit 78
+# GG_BEGIN_SOURCE
+#!/bin/bash
+set -u
+umask 077
+
+decode() {
+    /usr/bin/perl -MJSON::PP -e '
+        use strict; use warnings;
+        my ($client, $gui, $system, $compare, $finder) = @ARGV;
+        my ($finder_records, $finder_errors) = (0, 0);
+        my (%groups, $bad, $end, $client_failed, $linked, $client_endpoint, $icon_agent_endpoint);
+        while (<STDIN>) {
+            next if /^\s*$/;
+            my $e = eval { decode_json($_) };
+            if (ref($e) ne "HASH") { ++$bad; next }
+            if (exists $e->{finished}) { $end=1; next }
+            my $pid = $e->{processID} // "";
+            my $app = $e->{processImagePath} // $e->{process} // "";
+            $app =~ s{.*/}{};
+            my $msg = $e->{eventMessage} // "";
+            my ($service) = $msg =~ /\b(com\.apple\.iconservices(?:\.[a-zA-Z0-9_-]+)*)\b/i;
+            my ($code) = $msg =~ /\b((?:NSCocoaErrorDomain|NSPOSIXErrorDomain|NSOSStatusErrorDomain)\s+Code=-?\d+)/;
+            my ($refusal) = $msg =~ /(rejected by the listener|listener rejected|rejected peer)/i;
+            my $who;
+            my $icon_context = defined($service) || ($e->{subsystem} // "") =~ /iconservices/i
+                || ($e->{senderImagePath} // "") =~ m{/IconServices(?:/|$)}i || $msg =~ /failed to generate image/i;
+            if ($pid eq $client && $app eq "osascript") {
+                $who="clientul probei";
+                ++$client_failed if $icon_context && defined($code) && $code =~ /NSCocoaErrorDomain\s+Code=4097$/;
+                $client_endpoint=1 if defined($service);
+                $icon_agent_endpoint=1 if defined($service) && lc($service) eq "com.apple.iconservices";
+            } elsif (defined($finder) && $app eq "Finder" && $pid eq $finder) {
+                ++$finder_records;
+                ++$finder_errors if $icon_context && defined($code) && $code =~ /NSCocoaErrorDomain\s+Code=4097$/;
+                next;
+            } elsif ($app eq "iconservicesagent" || $app eq "iconservicesd") {
+                $who = "$app " . ($pid eq $gui ? "GUI" : $pid eq $system ? "sistem" : "PID $pid");
+            } else { next }
+            my $peer = $msg =~ /\b(?:peer(?:\s+pid)?\s*[=:]\s*|peer\[)\Q$client\E(?![0-9])/i;
+            my $event;
+            if ($refusal) {
+                $event = "refuz XPC";
+                if ($peer && $app ne "osascript") { $event .= " cu PID-ul probei"; $linked=1 }
+                elsif ($app ne "osascript") { $event .= " fara atribuire probei" }
+            } elsif ($code) { $event = "eroare" }
+            elsif (defined $service) { $event = "serviciu mentionat" }
+            else { next }
+            my $key = join(" | ", $who, $event, grep { defined } ($service,$code));
+            ++$groups{$key};
+        }
+        for my $k (sort keys %groups) { print "  $k | $groups{$k}\n" }
+        printf "Refuz cu PID explicit al clientului: %s. Cod 4097 din IconServices la client: %s. Serviciu IconServices numit de client: %s.\n",
+            map { $_ ? "da" : "neobservat" } ($linked,$client_failed,$client_endpoint);
+        if ($bad || !$end) { print "Jurnal incomplet.\n"; exit 3 }
+        if (($compare // "") eq "IconTrial") {
+            print "Finder PID=$finder: $finder_errors erori IconServices 4097 din $finder_records mesaje vizibile în interval.\n" if $finder;
+            printf "GG_ICON_COUNTS %d %d %d\n", $icon_agent_endpoint||0, $client_failed||0, $finder_errors;
+        }
+        if (($compare // "") eq "Aqua") {
+            print $client_failed
+                ? "Comparație: 4097 apare și în Aqua la clientul probei.\n"
+                : $client_endpoint
+                    ? "Comparație: client vizibil în Aqua, fără 4097 IconServices observat în acest interval.\n"
+                    : "Comparație neconcludentă: jurnalul nu arată interacțiunea clientului cu IconServices.\n";
+        }
+    ' "$@"
+}
+
+request_icon() {
+    exec /usr/bin/osascript -l JavaScript -e '
+        ObjC.import("AppKit");
+        const icon = $.NSWorkspace.sharedWorkspace.iconForFile("/");
+        const n = Number(icon.TIFFRepresentation.length);
+        if (!(n > 0)) throw new Error("Pictograma nu a produs date TIFF");
+        "Pictograma volumului Golden: " + n + " octeti TIFF";
+    '
+}
+
+probe() {
+    local uid client gui system start end pred request_rc domain expected=${1:-}
+    uid=$(/usr/bin/id -u)
+    if [[ $(/usr/sbin/sysctl -n hw.model) != MacBookPro9,1 || $(/usr/bin/sw_vers -buildVersion) != 26B131 || $(/usr/bin/stat -f %u /dev/console) != "$uid" ]]; then
+        echo 'Proba cere MacBookPro9,1 pornit în Golden 26B131, cu utilizatorul SSH conectat la desktop.'; return 2
+    fi
+    domain=$(/bin/launchctl managername) || return 4
+    if [[ -n $expected && $domain != Aqua ]]; then
+        echo "Sesiunea obținută este $domain. Proba Aqua nu a început."; return 4
+    fi
+    local agent=com.apple.iconservices.iconservicesagent
+    gui=$(/bin/launchctl print "gui/$uid/$agent" | /usr/bin/awk '$1=="pid" && $2=="=" {print $3; exit}')
+    system=$(/bin/launchctl print "system/$agent" | /usr/bin/awk '$1=="pid" && $2=="=" {print $3; exit}')
+    echo "Agent GUI PID=${gui:-necunoscut}, agent sistem PID=${system:-necunoscut}. Domeniu client: $domain."
+    start=$(/bin/date '+%Y-%m-%d %H:%M:%S%z')
+    # exec preserves the PID from the alarm wrapper through to osascript.
+    /usr/bin/perl -e 'alarm 25; exec @ARGV or die $!' /bin/bash -c "$(declare -f request_icon); request_icon" </dev/null &
+    client=$!
+    echo "O cerere AppKit pentru /. PID client=$client"
+    wait "$client"; request_rc=$?
+    echo "Cod de ieșire al cererii: $request_rc"
+    /bin/sleep 2
+    end=$(/bin/date '+%Y-%m-%d %H:%M:%S%z')
+    pred="(process == \"osascript\") OR (process IN {\"iconservicesagent\", \"iconservicesd\"} AND (eventMessage CONTAINS[c] \"reject\" OR eventMessage CONTAINS[c] \"$client\"))"
+    echo "Jurnal $start .. $end"
+    if ((request_rc != 0)); then expected=; echo 'Cererea a eșuat. Intervalul este doar diagnostic.'; fi
+    local finder=
+    if [[ $expected == IconTrial ]]; then
+        finder=$(/usr/bin/pgrep -u "$uid" -x Finder)
+        if [[ $finder =~ ^[0-9]+$ ]]; then
+            pred="$pred OR (process == \"Finder\" AND (subsystem CONTAINS[c] \"iconservices\" OR eventMessage CONTAINS[c] \"4097\" OR eventMessage CONTAINS[c] \"failed to generate image\"))"
+        else
+            finder=
+            echo 'Finder nu are un PID unic vizibil în acest interval.'
+        fi
+    fi
+    /usr/bin/perl -e 'alarm 60; exec @ARGV or die $!' /usr/bin/log show --style ndjson --info --debug --start "$start" --end "$end" --predicate "$pred" | decode "$client" "$gui" "$system" "$expected" "$finder"
+    local -a status=("${PIPESTATUS[@]}")
+    if ((status[0] || status[1])); then echo "Citire incompletă (log=${status[0]}, decodor=${status[1]})."; return 3; fi
+    echo 'TIFF confirmă că AppKit a livrat o imagine. Refuzurile fără PID explicit pot aparține altor cereri.'
+    return "$request_rc"
+}
+
+terminal_payload() {
+    echo "/bin/bash <<'GOLDEN_PICTOGRAMA_AQUA'"
+    declare -f decode request_icon probe
+    echo 'probe Aqua'
+    echo 'GOLDEN_PICTOGRAMA_AQUA'
+}
+
+shell_arg() {
+    # ssh runs its command through the account's login shell.
+    /usr/bin/perl -e 'my $q=chr(39); print $q,join($q.chr(92).$q.$q,split(/\x27/,$ARGV[0],-1)),$q' -- "$1"
+}
+
+terminal_state() {
+    local pids pid
+    local -a window=(--last 10m)
+    [[ -n ${2:-} ]] && window=(--start "$2" --end "$3")
+    pids=$(/usr/bin/pgrep -u "$1" -x Terminal)
+    if [[ -n $pids ]]; then
+        for pid in $pids; do
+            printf 'Terminal pe Golden (PID, stare, timp de la pornire): '
+            /bin/ps -p "$pid" -o pid=,state=,etime=
+        done
+    else
+        echo 'Terminal pe Golden: niciun proces al utilizatorului vizibil la citire.'
+    fi
+    # Only publish fixed diagnostic terms and error codes from launch records.
+    /usr/bin/perl -e 'alarm 20; exec @ARGV or die $!' /usr/bin/log show "${window[@]}" --style ndjson --info \
+        --predicate '(process IN {"lsd","launchservicesd","runningboardd","launchd","xpcproxy"}) AND (eventMessage CONTAINS[c] "com.apple.Terminal" OR eventMessage CONTAINS[c] "/Terminal.app")' |
+        /usr/bin/perl -MJSON::PP -ne '
+            next if /^\s*$/;
+            my $e=eval {decode_json($_)}; if (ref $e ne "HASH") {++$bad; next}
+            if (exists $e->{finished}) {$end=1; next}
+            ++$records;
+            my $m=$e->{eventMessage} // "";
+            if ($m =~ /\b(failed|denied|refused|timed out|crashed|exited|terminated)\b/i) {
+                my $kind=lc $1;
+                my ($code)=$m =~ /\b((?:[A-Za-z]*ErrorDomain|NSPOSIXErrorDomain)\s+Code=-?\d+)/;
+                ++$count{join " ", $kind, ($code // ())};
+            }
+            END {
+                print "Terminal, interval interogat: ",0+($records||0)," mesaje de lansare vizibile.\n";
+                for (sort keys %count) { print "  $_: $count{$_}\n" }
+                exit 3 if !$end || $bad;
+            }'
+    local -a rc=("${PIPESTATUS[@]}")
+    if ((rc[0] || rc[1])); then echo "Jurnalul de lansare este incomplet (log=${rc[0]}, decodor=${rc[1]})."; fi
+}
+
+terminal_reports() {
+    # Compare name snapshots in memory. Return paths only to the caller.
+    local dir file
+    for dir in "$HOME/Library/Logs/DiagnosticReports" /Library/Logs/DiagnosticReports; do
+        for file in "$dir"/Terminal[-_]*.ips "$dir"/Terminal[-_]*.crash; do
+            [[ -f $file ]] && printf '%s\n' "$file"
+        done
+    done
+    return 0
+}
+
+launch_terminal() {
+    local uid=$1 app=/System/Applications/Utilities/Terminal.app domain before last now opener rc start end
+    local previous_reports file new_reports=0 seen=0 digest
+    domain=$(/bin/launchctl managername)
+    if [[ $domain != Aqua || $(/usr/bin/id -u) != "$uid" || $uid == 0 ||
+          $(/usr/bin/stat -f %u /dev/console) != "$uid" ]]; then
+        echo "Oprit înainte de lansare: contul sau domeniul Aqua diferă."; return 2
+    fi
+    echo "Domeniu $domain, UID $uid. Aplicație: $app"
+    /usr/bin/stat -f 'Fișier %N: UID=%u GID=%g mod=%Sp' /usr/bin/login /usr/bin/su /usr/bin/sudo
+    if [[ ! -x "$app/Contents/MacOS/Terminal" ||
+          $(/usr/bin/plutil -extract CFBundleIdentifier raw -o - "$app/Contents/Info.plist") != com.apple.Terminal ]]; then
+        echo 'Oprit: aplicația Terminal lipsește, nu este executabilă sau are alt identificator.'; return 2
+    fi
+    if digest=$(/usr/bin/shasum -a 256 "$app/Contents/MacOS/Terminal"); then
+        digest=${digest%% *}
+        if [[ $digest == 81fe1ea506528cc0d58b290f61a8d2f1577e8d6bea6e04b1bda2bb4c08bacaef ]]; then
+            echo "Terminal SHA-256: $digest (identic cu manifestul imaginii)."
+        else
+            echo "Terminal SHA-256: $digest (diferit de manifestul imaginii)."
+        fi
+    else
+        echo 'SHA-256 al executabilului nu a putut fi citit.'
+    fi
+    previous_reports=$'\n'"$(terminal_reports)"$'\n'
+    before=$(/usr/bin/pgrep -x -u "$uid" Terminal)
+    last=$before
+    [[ -n $before ]] && seen=1
+    echo "Înainte de open: PID Terminal=${before:-absent}"
+    start=$(/bin/date '+%Y-%m-%d %H:%M:%S%z')
+    SECONDS=0
+    /usr/bin/perl -e 'alarm 15; exec @ARGV or die $!' /usr/bin/open -a "$app" </dev/null &
+    opener=$!
+    while (( SECONDS < 20 )); do
+        now=$(/usr/bin/pgrep -x -u "$uid" Terminal)
+        if [[ $now != "$last" ]]; then
+            echo "La +${SECONDS}s: PID Terminal=${now:-absent}"; last=$now
+        fi
+        [[ -n $now ]] && seen=1
+        /bin/sleep 0.5
+    done
+    wait "$opener"; rc=$?
+    end=$(/bin/date '+%Y-%m-%d %H:%M:%S%z')
+    echo "open: cod=$rc (142 înseamnă expirarea limitei de 15 s)."
+    now=$(/usr/bin/pgrep -x -u "$uid" Terminal)
+    echo "La sfârșitul observației: PID Terminal=${now:-absent}."
+    if [[ -n $now ]]; then
+        /bin/ps -axo pid=,ppid=,comm= | /usr/bin/awk -v roots="$now" '
+            BEGIN { n=split(roots,a,/[[:space:]]+/); for (i=1;i<=n;i++) root[a[i]]=1 }
+            { parent[$1]=$2; program[$1]=$3; sub(/^.*\//,"",program[$1]); sub(/^-/,"",program[$1]) }
+            END {
+                for (pid in parent) {
+                    if (program[pid] !~ /^(login|bash|zsh|fish|tcsh|csh|sh|ksh|dash)$/) continue;
+                    p=parent[pid];
+                    for (i=0;p>1 && i<16;i++) {
+                        if (root[p]) { print "Descendent Terminal: " program[pid] ", PID " pid ", PPID " parent[pid]; count++; break }
+                        p=parent[p]
+                    }
+                }
+                if (!count) print "La această citire, niciun login sau shell cunoscut vizibil sub PID-ul Terminal."
+            }'
+        /usr/bin/perl -e 'alarm 5; exec @ARGV or die $!' /usr/bin/osascript -l JavaScript -e '
+            ObjC.import("AppKit");
+            const apps = $.NSRunningApplication.runningApplicationsWithBundleIdentifier("com.apple.Terminal");
+            const lines = [];
+            for (let i=0; i<Number(apps.count); i++) {
+                const a = apps.objectAtIndex(i);
+                lines.push("PID " + a.processIdentifier + ", lansare încheiată=" +
+                    (a.isFinishedLaunching ? "da" : "nu") + ", aplicație activă=" + (a.isActive ? "da" : "nu"));
+            }
+            lines.length ? lines.join("\n") : "Terminal absent din lista AppKit.";
+        ' || echo 'Starea Terminal din AppKit nu a putut fi citită.'
+    elif ((seen)); then
+        echo 'Procesul Terminal a fost vizibil și apoi a dispărut.'
+    else
+        echo 'Niciun PID Terminal vizibil la sondările de aproximativ 0,5 s.'
+    fi
+    while IFS= read -r file; do
+        [[ -n $file && $previous_reports != *$'\n'"$file"$'\n'* ]] || continue
+        new_reports=$((new_reports+1))
+        /usr/bin/perl -MJSON::PP -e '
+            my $path = shift; (my $name=$path) =~ s{.*/}{};
+            $name = "Terminal (raport de diagnostic)" unless $name =~ /^Terminal-[0-9-]+(?:\.\d+)?\.ips$/;
+            print "Raport nou: $name\n";
+            exit unless $path =~ /\.ips$/ && -s $path <= 16*1024*1024;
+            open my $f,"<",$path or exit;
+            my $header=<$f>; local $/; my $rest=<$f>;
+            my $d=eval {decode_json($rest // "")}; exit unless ref($d) eq "HASH";
+            for my $k (["exception","type"],["termination","namespace"],["termination","code"]) {
+                my ($section,$key)=@$k; my $v=$d->{$section}{$key};
+                print "  $section.$key=$v\n" if defined $v && $v =~ /^[A-Z0-9_-]{1,80}$/;
+            }' -- "$file"
+    done < <(terminal_reports)
+    echo "Rapoarte Terminal nou apărute și vizibile: $new_reports."
+    echo "Jurnal pentru încercarea de lansare: $start .. $end"
+    terminal_state "$uid" "$start" "$end"
+    return "$rc"
+}
+
+gui_agent_pid() {
+    /bin/launchctl print "$job" | /usr/bin/awk '$1=="pid" && $2=="=" && $3 ~ /^[0-9]+$/ {print $3; exit}'
+}
+
+gui_agent_mode() {
+    # Inspect only this PID. Never export its command line or environment.
+    local -a rc
+    /bin/ps -Eww -p "$1" -o command= | /usr/bin/perl -ne '
+        if (/(?:^|\s)HAO_NO_AOT=([^\s]*)(?:\s|$)/) { $mode=$1 eq "1" ? "trial" : "other" }
+        END {print $mode // "unobserved"}'
+    rc=("${PIPESTATUS[@]}")
+    ((rc[0] == 0 && rc[1] == 0))
+}
+
+configured_aot_switch() {
+    # launchd prints job, default and inherited environment in the job description.
+    # Emit only whether the exact key is present, never any inherited values.
+    local -a rc
+    /bin/launchctl print "$job" | /usr/bin/awk '
+        /^[[:space:]]*"?HAO_NO_AOT"?[[:space:]]*(=>|=)/ {set_key=1}
+        END {print set_key ? "set" : "absent"}'
+    rc=("${PIPESTATUS[@]}")
+    ((rc[0] == 0 && rc[1] == 0))
+}
+
+agent_aot_mapping() {
+    local pid=$1 name=$2
+    local -a rc
+    [[ -n $name ]] || { echo unknown; return; }
+    # Only accept complete, successful maps of this PID with libhao itself
+    # visible. Non-lazy AOT unmaps its input; it cannot serve as a control.
+    /usr/bin/perl -e 'alarm 8; exec @ARGV or die $!' /usr/bin/vmmap -wide "$pid" 2>/dev/null |
+        /usr/bin/perl -ne '
+            BEGIN { ($pid,$n)=splice(@ARGV,0,2) }
+            $header=1 if /^Process:\s+.*\[\Q$pid\E\]/;
+            $runtime=1 if m{/libhao\.dylib(?:\s|$)};
+            $mapped=1 if m{/\Q$n\E(?:\s|$)};
+            END {print $header && $runtime ? ($mapped ? "mapped" : "not-mapped") : "unknown"}' "$pid" "$name"
+    rc=("${PIPESTATUS[@]}")
+    ((rc[0] == 0 && rc[1] == 0))
+}
+
+restart_gui_agent() {
+    local old now i
+    old=$(gui_agent_pid)
+    /bin/launchctl kickstart -k "$job" || return 1
+    for ((i=0;i<20;i++)); do
+        now=$(gui_agent_pid)
+        if [[ -n $now && $now != "$old" ]]; then
+            echo "Agent GUI: PID ${old:-absent} → $now."
+            return 0
+        fi
+        /bin/sleep 0.5
+    done
+    echo 'Relansarea agentului GUI nu a putut fi confirmată.'; return 1
+}
+
+normal_gui_agent() {
+    # If debug was armed but the first start failed, one invocation may
+    # still consume that one-shot setting before the ordinary invocation.
+    local pid mode i starts=0
+    for ((i=0;i<3;i++)); do
+        restart_gui_agent || continue
+        pid=$(gui_agent_pid); [[ -n $pid ]] || continue
+        starts=$((starts+1))
+        mode=$(gui_agent_mode "$pid") || mode=unobserved
+        # The one-shot launch property is consumed by the first launch.
+        # Two distinct successful restarts also cover a pending property.
+        if ((starts >= 2)) && [[ $mode == unobserved && $(gui_agent_pid) == "$pid" ]] &&
+             [[ $(configured_aot_switch) == absent ]]; then
+            echo "Restaurat: două lansări succesive fără un nou override. Agent GUI PID $pid."
+            return 0
+        fi
+    done
+    echo 'Restaurarea nu a putut fi confirmată. Folosește opțiunea --restaureaza-pictograme.'
+    return 1
+}
+
+measure_icon_client() {
+    local result metrics pid=$1
+    [[ $(gui_agent_pid) == "$pid" ]] || return 1
+    result=$(/bin/launchctl asuser "$uid" /usr/bin/sudo -n -H -u "#$uid" -- /bin/bash -c "$measure_body")
+    local rc=$?
+    printf '%s\n' "$result" | /usr/bin/sed '/^GG_ICON_COUNTS /d'
+    metrics=$(printf '%s\n' "$result" | /usr/bin/awk '$1=="GG_ICON_COUNTS" {print $2, $3, $4}')
+    if (( rc != 0 )) || [[ $(gui_agent_pid) != "$pid" || ! $metrics =~ ^1[[:space:]]([0-9]+)[[:space:]]([0-9]+)$ ]]; then
+        echo 'Cererea, PID-ul agentului sau jurnalul clientului nu permit comparația.'
+        return 1
+    fi
+    errors=${BASH_REMATCH[1]}
+    finder_errors=${BASH_REMATCH[2]}
+    echo "Mesaje 4097 atribuite IconServices în client: $errors."
+}
+
+repair_gui_icons() (
+    set -u
+    local uid=$1 action=$2 job="gui/$1/com.apple.iconservices.iconservicesagent"
+    local pid mode errors finder_errors measure_body confirmation configured aot_name before_map after_map
+    if [[ $(/usr/bin/id -u) != 0 || ! $uid =~ ^[1-9][0-9]*$ ||
+          $(/usr/bin/stat -f %u /dev/console) != "$uid" ||
+          $(/usr/sbin/sysctl -n hw.model) != MacBookPro9,1 ||
+          $(/usr/bin/sw_vers -buildVersion) != 26B131 ]]; then
+        echo 'Oprit: este necesar contul de la desktopul Golden 26B131 pe MacBookPro9,1.'; exit 2
+    fi
+    if [[ $action == repair-b ]]; then
+        local group
+        group=$(/usr/sbin/diskutil info -plist / | /usr/bin/plutil -extract APFSVolumeGroupID raw -o - -) || exit 2
+        if [[ $group != @@UUID_B_GROUP@@ ]]; then
+            echo 'Oprit înainte de intervenție: grupul APFS pornit diferă de Golden B.'; exit 2
+        fi
+        echo 'Golden B confirmat după grupul APFS.'
+    fi
+    pid=$(gui_agent_pid)
+    if [[ -z $pid ]]; then echo 'Agentul GUI nu are PID vizibil.'; exit 3; fi
+    mode=$(gui_agent_mode "$pid") || mode=unknown
+    if ! configured=$(configured_aot_switch) || [[ $configured != absent ]]; then
+        echo 'Setarea HAO_NO_AOT este configurată în launchd sau descrierea nu a putut fi citită. Configurația a fost păstrată.'; exit 3
+    fi
+    if [[ $action == undo ]]; then
+        normal_gui_agent; exit $?
+    fi
+    if [[ $mode == trial || $mode == other ]]; then
+        echo 'Procesul are deja o setare HAO_NO_AOT. Configurația a fost păstrată.'; exit 3
+    fi
+    measure_body="$(declare -f decode request_icon probe)"$'\n''probe IconTrial'
+    echo 'Control: relansarea obișnuită a aceluiași agent.'
+    restart_gui_agent || exit 3
+    pid=$(gui_agent_pid)
+    [[ -n $pid ]] || { echo 'PID-ul agentului de control lipsește.'; exit 3; }
+    mode=$(gui_agent_mode "$pid") || mode=unobserved
+    [[ $mode != trial && $mode != other ]] || { echo 'Agentul de control are deja o setare HAO_NO_AOT.'; exit 3; }
+    measure_icon_client "$pid" || exit 3
+    if ((errors == 0)); then
+        echo "Cererea de control nu a reprodus 4097. Finder a raportat $finder_errors erori în interval. Proba fără AOT s-a oprit."
+        exit 0
+    fi
+    aot_name=$(/usr/bin/perl -e 'alarm 8; exec @ARGV or die $!' /usr/libexec/hao --aot --check -- /System/Library/CoreServices/iconservicesagent 2>&1 |
+        /usr/bin/perl -ne 'print lc($1) if /: valid \([^()]*\/([0-9a-f]{32}\.aot)\)/i')
+    before_map=$(agent_aot_mapping "$pid" "$aot_name") || before_map=unknown
+    echo "Cache-ul AOT al agentului după cererea de control: $before_map."
+    # Bash 3 can leave the function scope before running a subshell EXIT trap.
+    # Capture the already validated job name, and disarm only after success.
+    trap "job='$job'; normal_gui_agent || exit 5" EXIT
+    trap 'exit 4' HUP INT TERM
+    echo 'Pornire temporară fără AOT, limitată la agentul grafic IconServices.'
+    /bin/launchctl debug "$job" --environment HAO_NO_AOT=1 || exit 4
+    restart_gui_agent || exit 4
+    pid=$(gui_agent_pid)
+    [[ -n $pid ]] || { echo 'Noul PID nu a putut fi citit.'; exit 4; }
+    mode=$(gui_agent_mode "$pid") || mode=unobserved
+    echo "Setarea pentru o singură lansare a fost acceptată. PID nou $pid; indicator de proces: $mode."
+    for confirmation in 1 2; do
+        echo "Cerere de pictogramă $confirmation după intervenție."
+        measure_icon_client "$pid" || exit 4
+        if ((errors > 0 || finder_errors > 0)); then echo 'Codul 4097 persistă. Revin la agentul obișnuit.'; exit 4; fi
+        if [[ $mode != trial ]]; then
+            after_map=$(agent_aot_mapping "$pid" "$aot_name") || after_map=unknown
+            if [[ $mode == other || $before_map != mapped || $after_map != not-mapped || $(gui_agent_pid) != "$pid" ]]; then
+                echo 'Efectul asupra modului AOT nu a putut fi confirmat. Revin la agentul obișnuit.'; exit 4
+            fi
+            echo 'În hărțile VM ale agentului, cache-ul său AOT era prezent la control și lipsește după intervenție.'
+        fi
+    done
+    trap - EXIT
+    echo 'Două cereri vizibile fără 4097. Agentul rămâne temporar în acest mod până la următoarea relansare.'
+    echo 'Pentru revenire acum, folosește opțiunea --restaureaza-pictograme.'
+)
+
+admin_aqua() {
+    local uid body mode=${1:-icons}
+    uid=$(/usr/bin/id -u)
+    if [[ $uid == 0 || $uid != "$(/usr/bin/stat -f %u /dev/console)" ||
+          $(/usr/sbin/sysctl -n hw.model) != MacBookPro9,1 || $(/usr/bin/sw_vers -buildVersion) != 26B131 ]]; then
+        echo 'Oprit: este necesar contul conectat la desktopul Golden 26B131 pe MacBookPro9,1.'; return 2
+    fi
+    if [[ $mode == repair || $mode == repair-b || $mode == undo ]]; then
+        body="$(declare -f decode request_icon probe gui_agent_pid gui_agent_mode configured_aot_switch agent_aot_mapping restart_gui_agent normal_gui_agent measure_icon_client repair_gui_icons)"$'\n''repair_gui_icons "$1" "$2"'
+        # Serialize A/B and undo using a read-only fd to the existing job plist.
+        /usr/bin/sudo -- /usr/bin/perl -MFcntl=:flock -e '
+            open my $lock,"<","/System/Library/LaunchAgents/com.apple.iconservices.iconservicesagent.plist" or die $!;
+            flock($lock, LOCK_EX|LOCK_NB) or die "Agentul face deja obiectul unei probe sau blocarea este indisponibilă.\n";
+            $^F=fileno($lock); fcntl($lock,Fcntl::F_SETFD(),0) or die $!;
+            exec @ARGV or die $!' -- /bin/bash -c "$body" golden "$uid" "$mode"
+        return $?
+    elif [[ $mode == terminal ]]; then
+        body="$(declare -f terminal_reports terminal_state launch_terminal)"$'\n''launch_terminal "$1"'
+    else
+        terminal_state "$uid"
+        body="$(declare -f decode request_icon probe)"$'\n''[[ $(/usr/bin/id -u) == "$1" && $1 != 0 ]] || exit 2; probe Aqua'
+    fi
+    echo 'Trecere în sesiunea grafică. Dacă apare Password:, introdu parola de administrator a contului de pe Golden.'
+    /usr/bin/sudo -- /bin/launchctl asuser "$uid" /usr/bin/sudo -n -H -u "#$uid" -- /bin/bash -c "$body" golden "$uid"
+}
+
+remote_mode=--target
+case "${1:-}" in
+    --remediaza-pictograme-b) remote_mode=repair-b; shift ;;
+    --remediaza-pictograme) remote_mode=repair; shift ;;
+    --restaureaza-pictograme) remote_mode=undo; shift ;;
+    --terminal-imac) remote_mode=admin-terminal; shift ;;
+    --aqua-imac) remote_mode=admin; shift ;;
+    --aqua) remote_mode=--target-aqua; shift ;;
+    --terminal-aqua) terminal_payload; exit 0 ;;
+    --target-aqua)
+        uid=$(/usr/bin/id -u)
+        if [[ $(/bin/launchctl managername) == Aqua ]]; then probe Aqua; exit $?; fi
+        if ! domain=$(/bin/launchctl asuser "$uid" /bin/launchctl managername) || [[ $domain != Aqua ]]; then
+            echo "SSH nu a putut intra în sesiunea Aqua. Domeniul returnat: ${domain:-indisponibil}."
+            exit 4
+        fi
+        /bin/launchctl asuser "$uid" /bin/bash -c "$(declare -f decode request_icon probe); probe Aqua"
+        exit $? ;;
+    --target) probe; exit $? ;;
+    --check)
+        decode 734 401 320 <<'JSON'
+{"process":"osascript","processID":734,"eventMessage":"Failed to generate image NSCocoaErrorDomain Code=4097 for com.apple.iconservices"}
+{"process":"iconservicesagent","processID":401,"eventMessage":"peer[734]: rejected by the listener"}
+{"process":"iconservicesagent","processID":401,"eventMessage":"peer[7349]: rejected by the listener"}
+{"finished":true}
+JSON
+        exit $? ;;
+esac
+dest=${1:-${GOLDEN_GATE_SSH:-@@SSH_TARGET@@}}
+if [[ $# -gt 1 || ! $dest =~ ^[[:alnum:]_][[:alnum:]_.-]*@[[:alnum:]][[:alnum:].-]*$ ]]; then exit 2; fi
+base=$(cd "$(dirname "$0")" && pwd -P) || exit 1
+prefix=GoldenGate-Proba-Pictograma
+[[ $remote_mode == --target-aqua ]] && prefix=GoldenGate-Proba-Pictograma-Aqua
+[[ $remote_mode == admin ]] && prefix=GoldenGate-Proba-Aqua-iMac
+[[ $remote_mode == admin-terminal ]] && prefix=GoldenGate-Lansare-Terminal
+[[ $remote_mode == repair || $remote_mode == repair-b || $remote_mode == undo ]] && prefix=GoldenGate-Remediere-Pictograme
+report=$(/usr/bin/mktemp "$base/$prefix.XXXXXXXX") || exit 1
+echo "Raport pe iMac: $report"
+ssh_args=(-F /dev/null -o StrictHostKeyChecking=yes -o UpdateHostKeys=no -o ClearAllForwardings=yes -o ForwardAgent=no -o ForwardX11=no -o ConnectTimeout=8 -o ServerAliveInterval=10 -o ServerAliveCountMax=3)
+run_remote() {
+    if [[ $remote_mode == admin || $remote_mode == admin-terminal || $remote_mode == repair || $remote_mode == repair-b || $remote_mode == undo ]]; then
+        local body
+        if [[ $remote_mode == repair || $remote_mode == repair-b || $remote_mode == undo ]]; then
+            body="$(declare -f decode request_icon probe gui_agent_pid gui_agent_mode configured_aot_switch agent_aot_mapping restart_gui_agent normal_gui_agent measure_icon_client repair_gui_icons admin_aqua)"$'\n'"admin_aqua $remote_mode"
+        elif [[ $remote_mode == admin-terminal ]]; then
+            body="$(declare -f terminal_reports terminal_state launch_terminal admin_aqua)"$'\n''admin_aqua terminal'
+        else
+            body="$(declare -f terminal_state admin_aqua decode request_icon probe)"$'\n''admin_aqua'
+        fi
+        /usr/bin/ssh -tt "${ssh_args[@]}" "$dest" "/bin/bash -c $(shell_arg "$body")" </dev/tty
+    else
+        /usr/bin/ssh -T "${ssh_args[@]}" "$dest" /bin/bash -s -- "$remote_mode" < "$0"
+    fi
+}
+run_remote | /usr/bin/tee "$report"
+status=("${PIPESTATUS[@]}")
+(( status[1] == 0 )) || exit 1
+if [[ $remote_mode == --target-aqua && ${status[0]} == 4 ]]; then
+    echo 'Pentru Terminalul de pe Golden poți copia proba pe iMac cu:'
+    printf '  %q --terminal-aqua | /usr/bin/pbcopy\n' "$base/$(basename "$0")"
+    echo 'Sau selectează blocul următor și lipește-l în Terminal pe Golden:'
+    terminal_payload
+fi
+exit "${status[0]}"

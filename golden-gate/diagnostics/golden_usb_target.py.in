@@ -1,0 +1,316 @@
+#!/bin/sh
+printf '%s\n' 'Șablon A/B. Completează profilul local înainte de utilizare.' >&2
+exit 78
+# GG_BEGIN_SOURCE
+"""Selectează explicit un disc USB fizic și leagă acordul de instanța hardware curentă."""
+import hashlib
+import json
+import plistlib
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+DISKUTIL = "/usr/sbin/diskutil"
+WHOLE = re.compile(r"disk\d+\Z")
+DEVICE = re.compile(r"(disk\d+)(?:s\d+)*\Z")
+APFS = {"APPLE_APFS", "7C3457EF-0000-11AA-AA11-00306543ECAC"}
+GOLDEN_A = {"@@UUID_A_PROTECTED_1@@", "@@UUID_A_PROTECTED_2@@",
+            "@@UUID_A_PROTECTED_4@@",
+            "@@UUID_A_GROUP@@", "@@UUID_A_PROTECTED_3@@"}
+COMPOSITE = {"53746F72-6167-11AA-AA11-00306543ECAC", "52414944-0000-11AA-AA11-00306543ECAC",
+             "52414944-5F4F-11AA-AA11-00306543ECAC"}
+
+
+def run(*args):
+    p = subprocess.run(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    if p.returncode:
+        reason = (p.stderr or p.stdout).decode(errors="replace").strip()
+        raise RuntimeError(f"{Path(args[0]).name}: {reason[:300]}")
+    return p.stdout
+
+
+def plist(*args):
+    return plistlib.loads(run(DISKUTIL, *args))
+
+
+def whole(node):
+    match = DEVICE.fullmatch(str(node))
+    if not match:
+        raise ValueError("Identificator de disc necunoscut: " + str(node))
+    return match.group(1)
+
+
+def live_media_id(name):
+    if not WHOLE.fullmatch(name):
+        raise ValueError("Se acceptă numai un disc întreg.")
+    # ioreg text includes the registry's per-attachment entry ID even when -a is unavailable.
+    text = run("/usr/sbin/ioreg", "-r", "-c", "IOMedia", "-d", "1", "-w", "0").decode(errors="replace")
+    ids = []
+    for block in re.split(r"(?m)^\+-o ", text):
+        header, _, props = block.partition("\n")
+        match = re.search(r"<class [^,]+, id (0x[0-9a-fA-F]+),", header)
+        if (match and re.search(r'(?m)^\s*"BSD Name" = "' + name + r'"\s*$', props)
+                  and re.search(r'(?m)^\s*"Whole" = Yes\s*$', props)):
+            ids.append(match.group(1).lower())
+    if len(ids) != 1:
+        raise ValueError("Instanța IOMedia nu se poate identifica pentru " + name)
+    return ids[0]
+
+
+def physical_rows(external=False):
+    args = ("external", "physical") if external else ("physical",)
+    rows = plist("list", "-plist", *args)["AllDisksAndPartitions"]
+    result = {row["DeviceIdentifier"]: row for row in rows}
+    if len(result) != len(rows) or any(not WHOLE.fullmatch(name) for name in result):
+        raise ValueError("Inventarul discurilor fizice conține identificatori ambigui.")
+    return result
+
+
+def mount_source(path):
+    # diskutil info expects a device or a mountpoint. df accepts the image's regular-file path.
+    rows = run("/bin/df", "-P", str(path)).decode(errors="replace").splitlines()
+    if len(rows) != 2:
+        raise ValueError("Nu se poate identifica volumul care conține " + str(path))
+    node = rows[1].split()[0]
+    if not node.startswith("/dev/") or not DEVICE.fullmatch(node[5:]):
+        raise ValueError("Suportul fizic nu poate fi confirmat pentru " + str(path))
+    return node[5:]
+
+
+def backing_disks(node, containers, physical):
+    info = plist("info", "-plist", node)
+    if info.get("DeviceIdentifier") != node:
+        raise ValueError("Identitatea volumului sursă sau de pornire s-a schimbat.")
+    parent = whole(node)
+    ref = info.get("APFSContainerReference")
+    if ref or str(info.get("FilesystemType", "")).lower() == "apfs":
+        matched = [c for c in containers if c["ContainerReference"] == (ref or parent)]
+        if len(matched) != 1:
+            raise ValueError("Containerul APFS al sursei sau sistemului nu poate fi urmărit.")
+        stores = {whole(p["DeviceIdentifier"]) for p in matched[0]["PhysicalStores"]}
+        declared = {whole(p["APFSPhysicalStore"]) for p in info.get("APFSPhysicalStores", [])}
+        if not stores or (declared and declared != stores) or not stores <= physical:
+            raise ValueError("Suporturile APFS ale sursei sau sistemului sunt ambigue.")
+        return stores
+    if parent not in physical:
+        raise ValueError("Discul fizic subiacent sursei sau sistemului nu poate fi confirmat.")
+    return {parent}
+
+
+def reject_golden_a(*values):
+    if GOLDEN_A.intersection(str(value).upper() for value in values):
+        raise ValueError("Discul conține copia de pornire Golden A.")
+
+
+def system_mounts(devices):
+    # Snapshot devices may not be present as separate rows in diskutil apfs list.
+    mounts = {}
+    for line in run("/sbin/mount").decode(errors="replace").splitlines():
+        node, sep, rest = line.partition(" on ")
+        node = node.rsplit("@", 1)[-1]
+        if sep and node.startswith("/dev/") and DEVICE.fullmatch(node[5:]) and whole(node[5:]) in devices:
+            mounts[node[5:]] = rest.rpartition(" (")[0] or rest
+    return mounts
+
+
+def composite(content):
+    upper = content.upper()
+    return upper in COMPOSITE or "CORESTORAGE" in upper or "RAID" in upper
+
+
+def describe_node(row, mounts, apfs=False, check_uuids=reject_golden_a):
+    node = row["DeviceIdentifier"]
+    details = plist("info", "-plist", node)
+    if details.get("DeviceIdentifier") != node:
+        raise ValueError("Un volum al destinației s-a schimbat.")
+    if details.get("MountPoint"):
+        mounts[node] = str(details["MountPoint"])
+    uuids = {k: str(details.get(k) or row.get(k) or "").upper()
+             for k in ("DiskUUID", "VolumeUUID", "APFSVolumeUUID", "APFSVolumeGroupID")}
+    check_uuids(*uuids.values())
+    roles = sorted(row.get("Roles") or [])
+    if apfs and not (uuids["VolumeUUID"] or uuids["APFSVolumeUUID"]):
+        raise ValueError("Un volum APFS nu poate fi identificat.")
+    if details.get("RAIDSlice") or details.get("RAIDMaster"):
+        raise ValueError("Dispozitivul aparține unui grup RAID.")
+    size = int(row.get("Size") or details.get("Size") or details.get("TotalSize") or 0)
+    content = str(row.get("Content") or details.get("Content") or "")
+    area = dict(device=node, size=size, offset=details.get("PartitionMapPartitionOffset", details.get("PartitionOffset")),
+                content=content, uuids=uuids, roles=roles)
+    label = str(details.get("VolumeName") or row.get("VolumeName") or "")
+    return area, label
+
+
+def inspect_target(name, image, *, check_uuids=reject_golden_a):
+    if not WHOLE.fullmatch(name):
+        raise ValueError("Se acceptă numai identificatorul unui disc întreg.")
+    image = Path(image).resolve(strict=True)
+    if not image.is_file():
+        raise ValueError("Sursa trebuie să fie imaginea locală verificată.")
+    rows = physical_rows(True)
+    if name not in rows:
+        raise ValueError("Discul nu mai apare ca dispozitiv fizic extern.")
+    entry_id = live_media_id(name)
+    target = plist("info", "-plist", name)
+    size = int(target.get("Size") or target.get("TotalSize") or 0)
+    if (target.get("DeviceIdentifier") != name or target.get("WholeDisk") is not True
+            or target.get("Internal") is not False or target.get("Writable") is not True
+            or target.get("BusProtocol") != "USB" or target.get("DeviceBlockSize") != 512
+            or size < max(80 * 1024**3, image.stat().st_size)):
+        raise ValueError("Se cere un disc fizic USB extern, inscriptibil, de minimum 80 GiB, cu sector de 512 octeți.")
+    topology = plist("apfs", "list", "-plist")["Containers"]
+    physical = set(physical_rows())
+    protected = set()
+    for node in {mount_source("/"), mount_source("/System/Volumes/Data"), mount_source(image)}:
+        protected.update(backing_disks(node, topology, physical))
+    if name in protected:
+        raise ValueError("Discul susține sistemul de pornire sau fișierul imaginii sursă.")
+    if name not in physical:
+        raise ValueError("Destinația a dispărut din inventarul fizic.")
+    mounts = {}
+    if target.get("MountPoint"):
+        mounts[name] = str(target["MountPoint"])
+    scheme = str(rows[name].get("Content") or target.get("Content") or "")
+    if composite(scheme) or target.get("RAIDSlice") or target.get("RAIDMaster"):
+        raise ValueError("Discul face parte dintr-o structură de stocare compusă.")
+    raw_parts = rows[name].get("Partitions") or []
+    parts, labels = [], []
+    for row in raw_parts:
+        if whole(row["DeviceIdentifier"]) != name or row["DeviceIdentifier"] == name:
+            raise ValueError("O partiție nu aparține discului USB ales.")
+        part, label = describe_node(row, mounts, check_uuids=check_uuids)
+        if composite(part["content"]):
+            raise ValueError("Partiție cu stocare compusă la destinație.")
+        # Non-APFS filesystem UUIDs may only be exposed while mounted. The GPT
+        # partition UUID and geometry continue to identify its partition layout.
+        part["uuids"] = {"DiskUUID": part["uuids"]["DiskUUID"]}
+        parts.append(part)
+        labels.append((part, label))
+
+    containers = []
+    attached_stores = set()
+    for c in topology:
+        stores = [p["DeviceIdentifier"] for p in c["PhysicalStores"]]
+        if name not in {whole(s) for s in stores}:
+            continue
+        if len(stores) != 1 or c.get("Fusion") is True:
+            raise ValueError("Destinația participă la un container APFS cu mai multe suporturi.")
+        attached_stores.update(stores)
+        ref = c["ContainerReference"]
+        if not WHOLE.fullmatch(ref) or ref == name:
+            raise ValueError("Identificatorul containerului sintetizat este ambiguu.")
+        check_uuids(c.get("APFSContainerUUID"))
+        volumes = []
+        for row in c["Volumes"]:
+            if whole(row["DeviceIdentifier"]) != ref:
+                raise ValueError("Un volum APFS nu aparține containerului ales.")
+            vol, label = describe_node(row, mounts, apfs=True, check_uuids=check_uuids)
+            # APFS volume capacity is dynamic and can change at unmount; its UUID is stable.
+            vol.pop("size")
+            volumes.append(vol)
+            labels.append((vol, label))
+        containers.append(dict(name=ref, store=stores[0], uuid=c.get("APFSContainerUUID"),
+                               volumes=sorted(volumes, key=lambda v: v["device"])))
+    declared_stores = {p["device"] for p in parts if p["content"].upper() in APFS}
+    if scheme.upper() in APFS:
+        declared_stores.add(name)
+    if not declared_stores <= attached_stores:
+        raise ValueError("Un container APFS de pe destinație nu este încă identificabil.")
+    mounts.update(system_mounts({name, *(c["name"] for c in containers)}))
+    check_uuids(target.get("VolumeUUID"), target.get("DiskUUID"))
+    if entry_id != live_media_id(name):
+        raise ValueError("Suportul fizic USB s-a schimbat în timpul inspecției.")
+    hardware = str(target.get("DeviceTreePath") or "")
+    model = str(target.get("MediaName") or target.get("IORegistryEntryName") or name)
+    # Only physical slices belong to the partition map. Mounting or opening the
+    # whole disk can change or retire synthesized APFS devices and their metadata.
+    partitions = {p["device"]: (p["size"], p["uuids"]["DiskUUID"]) for p in parts}
+    layout = dict(device=name, media_id=entry_id, size=size, sector=target["DeviceBlockSize"],
+                  scheme=scheme, partitions=partitions)
+    fingerprint = hashlib.sha256(json.dumps(layout, sort_keys=True).encode()).hexdigest()
+    return dict(name=name, image=str(image), fingerprint=fingerprint, media_id=entry_id, size=size,
+                hardware_id=hardware, model=model, scheme=scheme, labels=labels, partitions=partitions,
+                containers=[c["name"] for c in containers], mounts=mounts,
+                container_uuids=[c["uuid"] for c in containers],
+                physical=target.get("VirtualOrPhysical"), registry_model=target.get("IORegistryEntryName"),
+                volume_name=str(target.get("VolumeName") or ""))
+
+
+def printable(value):
+    return "".join(ch if ch.isprintable() else " " for ch in str(value))
+
+
+def select_target(image):
+    if not sys.stdin.isatty() or not sys.stdout.isatty():
+        raise ValueError("Alegerea USB cere un Terminal interactiv pe iMac.")
+    candidates = {}
+    for name in physical_rows(True):
+        try:
+            proof = inspect_target(name, image)
+        except (ValueError, RuntimeError) as error:
+            print(f"{name} — exclus. {printable(error)}")
+            continue
+        candidates[name] = proof
+        print(f"/dev/{name} — {printable(proof['model'])} — {proof['size']:,} octeți "
+              f"({proof['size'] / 1024**3:.1f} GiB) — {printable(proof['scheme'] or 'fără schemă identificată')}")
+        if proof["volume_name"]:
+            print("  Volum pe întreg discul:", printable(proof["volume_name"]))
+        if not proof["labels"]:
+            print("  Nicio partiție identificată.")
+        for area, label in proof["labels"]:
+            kind = ", ".join(area["roles"]) or area["content"] or "tip necunoscut"
+            print(f"  {area['device']}  {printable(label or '(fără nume)')}  {printable(kind)}")
+    if not candidates:
+        raise ValueError("Nu este conectat niciun disc USB eligibil.")
+    print("Toate datele de pe discul selectat vor fi înlocuite cu imaginea B.", flush=True)
+    try:
+        reply = input("Scrie exact STERGE diskN cu identificatorul discului ales: ")
+    except EOFError:
+        raise ValueError("Selecția discului USB a fost închisă.") from None
+    for name, proof in candidates.items():
+        if reply == "STERGE " + name:
+            fresh = inspect_target(name, image)
+            if fresh["fingerprint"] != proof["fingerprint"]:
+                raise ValueError("Discul sau partițiile s-au schimbat după afișare.")
+            return name, fresh["fingerprint"]
+    raise ValueError("Confirmarea nu corespunde niciunui disc USB afișat.")
+
+
+def same_attachment(name, proof):
+    if proof["name"] != name or proof["media_id"] != live_media_id(name):
+        raise ValueError("Identificatorul fizic IOMedia s-a schimbat pentru " + name + ".")
+
+
+def assert_unmounted(name, proof, *, check_uuids=reject_golden_a):
+    same_attachment(name, proof)
+    devices = {name, *proof["containers"]}
+    for row in plist("apfs", "list", "-plist")["Containers"]:
+        stores = [s["DeviceIdentifier"] for s in row["PhysicalStores"]]
+        if any(whole(s) == name for s in stores):
+            if len(stores) != 1 or row.get("Fusion"):
+                raise ValueError("SSD-ul ales participă la un container APFS compus.")
+            check_uuids(row.get("APFSContainerUUID"))
+            devices.add(row["ContainerReference"])
+    mounts = system_mounts(devices)
+    if mounts:
+        raise ValueError("Mai există volume montate pe USB: " + ", ".join(sorted(mounts)))
+    same_attachment(name, proof)
+
+
+def unmount_target(name, proof, *, check_uuids=reject_golden_a):
+    same_attachment(name, proof)
+    # The physical target was fully inspected immediately before this call.
+    # Resolve each synthesized ID again before addressing it, since it can be reused.
+    for ref in proof["containers"]:
+        if system_mounts({ref}):
+            rows = plist("apfs", "list", "-plist")["Containers"]
+            stores = [store["DeviceIdentifier"] for row in rows if row["ContainerReference"] == ref
+                      for store in row["PhysicalStores"]]
+            if len(stores) != 1 or whole(stores[0]) != name:
+                raise ValueError("Asocierea containerului montat " + ref + " cu SSD-ul ales s-a schimbat.")
+            same_attachment(name, proof)
+            run(DISKUTIL, "unmountDisk", ref)
+    same_attachment(name, proof)
+    run(DISKUTIL, "unmountDisk", name)
+    assert_unmounted(name, proof, check_uuids=check_uuids)

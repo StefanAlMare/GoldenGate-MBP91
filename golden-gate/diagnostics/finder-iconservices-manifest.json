@@ -1,0 +1,15 @@
+{
+  "format": 1,
+  "pack": "mbp91-finder-iconservices",
+  "phase": "live-capable",
+  "files": {
+    "System/Library/CoreServices/iconservicesagent": {
+      "sha256": "0c34b609f914b0f1e1e263268528e04715ce59d4de34770cba3af1d40d752de8",
+      "mode": "0755",
+      "owner": "root:wheel",
+      "flags": [
+        "restricted"
+      ]
+    }
+  }
+}

@@ -1,0 +1,198 @@
+#!/bin/sh
+printf '%s\n' 'Șablon A/B. Completează profilul local înainte de utilizare.' >&2
+exit 78
+# GG_BEGIN_SOURCE
+#!/usr/bin/python3
+"""Transferă proba Golden A printr-o singură conexiune SSH către Golden B."""
+import hashlib
+import io
+from pathlib import Path
+import os
+import re
+import shlex
+import subprocess
+import sys
+import tarfile
+import tempfile
+
+HERE = Path(__file__).resolve().parent
+OUTPUT = HERE.parents[2] / "outputs"
+SOURCE_NAME = "Golden-A-26B131-Pictograme.tar.gz"
+SOURCE_SHA = "dd7a1124ef70a176fd06b177b9e58742a77438d67f4674d538180924879b44d4"
+INDEX_SHA = "fe6be8430620640f462def2224a9738b8965be2229dfe05179bad69d22ca68c0"
+MANIFEST_SHA = "b41fb48f7e62ede55447339cc32f1c0cbfd23ba24bcbbd6395c9fd8f013d9fc0"
+UNIT = re.compile(r"[0-9A-F]{8}(?:-[0-9A-F]{4}){3}-[0-9A-F]{12}\.isdata")
+SCRIPTS = ("gg_icon_trial.sh", "gg_icon_user.pl", "gg_icon_units.pl", "icon_reference.sh")
+HOST = "@@SSH_TARGET@@"
+SSH = ["/usr/bin/ssh", "-F", "/dev/null", "-o", "StrictHostKeyChecking=yes", "-o",
+       "UpdateHostKeys=no", "-o", "ClearAllForwardings=yes", "-o", "ForwardAgent=no",
+       "-o", "ForwardX11=no", "-o", "ConnectTimeout=8", "-o", "ServerAliveInterval=10",
+       "-o", "ServerAliveCountMax=3"]
+MODES = {(): "apply", ("--aplica",): "apply", ("--revenire",): "undo", ("--undo",): "undo",
+         ("--stare",): "status", ("--status",): "status"}
+STAGE = re.compile(rb"/private/tmp/GG-cache-B\.[A-Za-z0-9]{8}")
+
+REMOTE = r"""
+set -eu -o pipefail
+umask 077
+uid=$(/usr/bin/id -u)
+group=$(/usr/sbin/diskutil info -plist / | /usr/bin/plutil -extract APFSVolumeGroupID raw -o - -)
+if [[ $(/usr/sbin/sysctl -n hw.model) != MacBookPro9,1 || $(/usr/bin/sw_vers -buildVersion) != 26B131 ||
+      $group != @@UUID_B_GROUP@@ || $uid != 501 ||
+      $(/usr/bin/stat -f %u /dev/console) != "$uid" || $(/usr/bin/id -un) != @@GUI_USER@@ ]]; then
+    echo 'GG_STOP Modelul, buildul, contul activ sau grupul APFS diferă de Golden B.'
+    exit 2
+fi
+stage=$(/usr/bin/mktemp -d /private/tmp/GG-cache-B.XXXXXXXX)
+trap '/bin/rm -rf -- "$stage"' EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
+/bin/stty onlcr 2>/dev/null || true
+echo "GG_STAGE $stage"
+for ((i=0; i<900; i++)); do
+    [[ ! -e "$stage/.transmis" ]] || break
+    /bin/sleep 1
+done
+[[ -f "$stage/.transmis" ]] || { echo 'GG_STOP Transfer expirat.'; exit 3; }
+if /bin/bash "$stage/gg_icon_trial.sh" "$1" "$stage"; then
+    exit 0
+else
+    rc=$?
+    echo "GG_STOP Faza $1 s-a încheiat cu codul $rc."
+    exit "$rc"
+fi
+"""
+
+
+def digest(data):
+    return hashlib.sha256(data).hexdigest()
+
+
+def member(tar, name, data):
+    row = tarfile.TarInfo(name)
+    row.mode = 0o600
+    row.size = len(data)
+    tar.addfile(row, io.BytesIO(data))
+
+
+def add_donor(tar, source):
+    units = {}
+    index = None
+    with source.open("rb") as raw:
+        check = hashlib.sha256()
+        for block in iter(lambda: raw.read(1 << 20), b""):
+            check.update(block)
+        if check.hexdigest() != SOURCE_SHA:
+            raise ValueError("Arhiva Golden A are altă amprentă SHA-256.")
+        raw.seek(0)
+        with tarfile.open(fileobj=raw, mode="r|gz") as src:
+            for row in src:
+                if row.name == "Golden-A-26B131/cont/store.index":
+                    if not row.isfile() or row.size != 720896 or index is not None:
+                        raise ValueError("Index Golden A nevalid.")
+                    index = src.extractfile(row).read()
+                elif row.name.startswith("Golden-A-26B131/depozit/"):
+                    name = row.name.split("/")[-1]
+                    if not UNIT.fullmatch(name):
+                        continue
+                    if not row.isfile() or name in units or not 0 < row.size <= 256 * 1024 * 1024:
+                        raise ValueError("Fișier de pictogramă nevalid.")
+                    data = src.extractfile(row).read()
+                    units[name] = f"{name}\t{len(data)}\t{digest(data)}\n"
+                    member(tar, "units/" + name, data)
+    manifest = "".join(units[name] for name in sorted(units)).encode("ascii")
+    if len(units) != 228 or digest(manifest) != MANIFEST_SHA or index is None or digest(index) != INDEX_SHA:
+        raise ValueError("Setul extras nu corespunde celor 228 de unități și indexului de pe A.")
+    member(tar, "manifest.tsv", manifest)
+    member(tar, "store.index", index)
+
+
+def make_transport(path, mode):
+    with tarfile.open(path, "w:gz", compresslevel=1) as tar:
+        for name in SCRIPTS:
+            member(tar, name, (HERE / name).read_bytes())
+        if mode == "apply":
+            add_donor(tar, OUTPUT / SOURCE_NAME)
+
+
+def upload(socket, stage, payload):
+    # ProxyCommand=false prevents a fresh connection if the master has exited.
+    dest = shlex.quote(stage)
+    body = (f'[[ -d {dest} && ! -L {dest} && $(/usr/bin/stat -f "%u:%Lp" {dest}) == '
+            f'"$(/usr/bin/id -u):700" ]] && '
+            f'/usr/bin/tar -xzf - -C {dest} && : > {dest}/.transmis')
+    cmd = SSH + ["-T", "-S", socket, "-o", "BatchMode=yes", "-o", "ProxyCommand=/usr/bin/false",
+                 HOST, "/bin/bash -c " + shlex.quote(body)]
+    with payload.open("rb") as stream:
+        subprocess.run(cmd, stdin=stream, check=True, timeout=840)
+
+
+def exchange(socket, payload, mode, report):
+    command = "/bin/bash -c " + shlex.quote(REMOTE) + " golden " + mode
+    proc = subprocess.Popen(SSH + ["-M", "-S", socket, "-tt", HOST, command], stdout=subprocess.PIPE)
+    sent = False
+    pending = b""
+    try:
+        while True:
+            chunk = os.read(proc.stdout.fileno(), 8192)
+            if not chunk:
+                break
+            # Stream prompts immediately. Only structured diagnostics go into the report.
+            sys.stdout.buffer.write(chunk)
+            sys.stdout.buffer.flush()
+            pending += chunk
+            while b"\n" in pending:
+                line, pending = pending.split(b"\n", 1)
+                line = line.rstrip(b"\r")
+                if line.startswith(b"GG_STAGE "):
+                    stage = line[9:]
+                    if sent or not STAGE.fullmatch(stage):
+                        raise ValueError("Director temporar SSH neașteptat.")
+                    upload(socket, stage.decode("ascii"), payload)
+                    sent = True
+                elif line.startswith(b"GG_"):
+                    print(line.decode("utf-8", "replace"), file=report, flush=True)
+        rc = proc.wait()
+        if not sent and rc == 0:
+            raise RuntimeError("Transferul către B nu a fost confirmat.")
+        return rc
+    finally:
+        if proc.poll() is None:
+            proc.terminate()
+            try:
+                proc.wait(timeout=6)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait()
+        proc.stdout.close()
+
+
+def main(args):
+    mode = MODES.get(tuple(args))
+    if mode is None:
+        sys.exit("Opțiuni disponibile: --aplica, --stare, --revenire.")
+    if not sys.stdin.isatty():
+        sys.exit("Lansează comanda din Terminal pe iMac, pentru autentificarea SSH.")
+    os.umask(0o077)
+    OUTPUT.mkdir(exist_ok=True)
+    folder = Path(tempfile.mkdtemp(prefix="Finder-Cache-B-", dir=OUTPUT))
+    report_path = folder / "raport.txt"
+    print("Raport pe iMac:", report_path, flush=True)
+    with report_path.open("x") as report, tempfile.TemporaryDirectory(prefix="ggcache-", dir="/private/tmp") as tmp:
+        print("Mod:", mode, file=report, flush=True)
+        payload = Path(tmp) / "transport.tar.gz"
+        try:
+            make_transport(payload, mode)
+            rc = exchange(str(Path(tmp) / "s"), payload, mode, report)
+        except (OSError, RuntimeError, ValueError, tarfile.TarError, subprocess.SubprocessError) as exc:
+            message = "Proba a fost întreruptă: " + str(exc)
+            print(message, file=report)
+            print(message, file=sys.stderr)
+            return 1
+        print("Cod de ieșire:", rc, file=report)
+        return rc
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

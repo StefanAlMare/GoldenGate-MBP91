@@ -1,0 +1,460 @@
+#!/bin/sh
+printf '%s\n' 'Șablon A/B. Completează profilul local înainte de utilizare.' >&2
+exit 78
+# GG_BEGIN_SOURCE
+# Root controller. probe_code and donor_code are supplied by the iMac launcher.
+set -u
+umask 077
+job=gui/501/com.apple.iconservices.iconservicesagent
+plist=/System/Library/LaunchAgents/com.apple.iconservices.iconservicesagent.plist
+stock=/System/Library/CoreServices/iconservicesagent
+lock=/private/var/run/gg-iconservices-b.lock
+
+bounded() { /usr/bin/perl -e 'alarm shift; exec @ARGV or die "$!\n"' "$@"; }
+registration() {
+    detail=$(bounded 7 /bin/launchctl print "$job") || return 1
+    local path type program
+    path=$(field path); type=$(field type); program=$(field program)
+    local expected=
+    if [[ -n ${t:-} && -f $t/armed ]]; then expected=$(get donor); fi
+    [[ $path == "$plist" && $type == LaunchAgent &&
+       ( $program == "$stock" || ( -n $expected && $program == "$expected" ) ) &&
+       $(/usr/bin/plutil -extract Label raw -o - "$plist") == "${job##*/}" &&
+       $(/usr/bin/plutil -extract ProgramArguments.0 raw -o - "$plist") == "$stock" ]] || return 1
+}
+field() { /usr/bin/awk -v key="$1" 'index($0,"\t" key " = ")==1 {sub(/^\t[^=]+ = /,"");print;exit}' <<< "$detail"; }
+registered_pid() {
+    registration || return 1
+    local p
+    p=$(field pid)
+    [[ $p =~ ^[1-9][0-9]*$ && $(/bin/ps -p "$p" -o uid= | /usr/bin/awk '{print $1}') == 501 ]] || return 1
+    printf '%s\n' "$p"
+}
+image_path() {
+    /usr/bin/ruby --disable-gems -rfiddle -e '
+      pid = Integer(ARGV.fetch(0)); buf = Fiddle::Pointer.malloc(4096)
+      f = Fiddle::Function.new(Fiddle::Handle::DEFAULT["proc_pidpath"],
+        [Fiddle::TYPE_INT,Fiddle::TYPE_VOIDP,Fiddle::TYPE_INT],Fiddle::TYPE_INT)
+      exit 2 unless f.call(pid,buf,4096) > 0
+      puts buf.to_s' "$1"
+}
+match_image() {
+    local pid path
+    pid=$(registered_pid) && path=$(image_path "$pid") &&
+    [[ -n $path && -f $2 && $path -ef $2 && $pid != "${3:-}" ]] &&
+    [[ $(registered_pid) == "$pid" ]] || return 1
+    printf '%s\n' "$pid" > "$1"
+}
+await_image() {
+    local i
+    for ((i=0;i<12;i++)); do
+        match_image "$@" && return 0
+        /bin/sleep 1
+    done
+    return 1
+}
+root_gate() {
+    [[ $(/usr/bin/id -u) == 0 && $(/usr/bin/stat -f %u /dev/console) == 501 &&
+       $(/usr/bin/id -nu 501) == @@GUI_USER@@ && $(/usr/sbin/sysctl -n hw.model) == MacBookPro9,1 &&
+       $(/usr/bin/sw_vers -buildVersion) == 26B131 &&
+       $(/usr/sbin/diskutil info -plist / | /usr/bin/plutil -extract APFSVolumeGroupID raw -o - -) == @@UUID_B_GROUP@@ ]] && registration
+}
+note() { printf 'GG_AGENT %s\n' "$*" >> "$t/events"; }
+put() { printf '%s\n' "$2" > "$t/$1.new" && /bin/mv -f "$t/$1.new" "$t/$1"; }
+get() { [[ -f $t/$1 ]] && /bin/cat "$t/$1"; }
+unlock() {
+    if [[ $(/usr/bin/readlink "$lock") == "$t" ]]; then /bin/rm -f "$lock"; fi
+}
+drop_mount() {
+    local dev point actual props group
+    [[ -f $t/mountpoint ]] || return 0
+    dev=$(get mounted)
+    point=$(get mountpoint)
+    [[ $dev =~ ^/dev/disk[0-9]+s[0-9]+$ && $point == "/Volumes/GG-Tahoe-${t##*.}" ]] || return 1
+    if [[ -d $point ]]; then
+        actual=$(/sbin/mount | /usr/bin/awk -v p="$point" '$2=="on" && $3==p {print $1}')
+        if [[ -n $actual ]]; then
+            [[ $actual == "$dev" || ( $actual == "${dev}s"* && ${actual#"${dev}s"} =~ ^[0-9]+$ ) ]] || return 1
+            props=$(/usr/sbin/diskutil info -plist "$point") || return 1
+            group=$(/usr/bin/plutil -extract APFSVolumeGroupID raw -o - - <<< "$props")
+            [[ $group == @@UUID_TAHOE_GROUP@@ ]] || return 1
+            bounded 40 /usr/sbin/diskutil unmount "$point" >> "$t/events" 2>&1 || return 1
+        fi
+        [[ ! -d $point ]] || /bin/rmdir "$point" || return 1
+    fi
+    /bin/rm -f "$t/mounted" "$t/mountpoint"
+}
+restore() {
+    local current path orig donor
+    if [[ -f $t/armed ]]; then
+        root_gate || { note 'Identitatea jobului sau a sesiunii s-a schimbat.'; return 1; }
+        orig=$(get orig)
+        donor=$(get donor)
+        current=$(registered_pid) || current=
+        if [[ -n $current ]]; then
+            path=$(image_path "$current") || return 1
+            [[ $path -ef $stock || $path -ef $donor ]] || { note 'Alt executabil a preluat serviciul. Oprire.'; return 1; }
+        fi
+        if [[ -f $t/used ]]; then
+            # A verified launch consumed the override. A subsequent stock PID
+            # already represents recovery, for example after a PressuredExit.
+            if ! match_image "$t/restored" "$stock" "$orig"; then
+                bounded 15 /bin/launchctl kickstart -k "$job" >> "$t/events" 2>&1 || :
+            fi
+        else
+            # A launch that failed might leave the one-shot option pending.
+            # Consume an explicit, verified stock launch even in that case.
+            if ! bounded 12 /bin/launchctl debug "$job" --program "$stock" >> "$t/events" 2>&1; then
+                note 'launchd a refuzat programul implicit de recuperare.'
+                return 1
+            fi
+            bounded 15 /bin/launchctl kickstart -k "$job" >> "$t/events" 2>&1 || :
+        fi
+        await_image "$t/restored" "$stock" "$orig" || { note 'Restaurarea agentului Golden nu a fost confirmată.'; return 1; }
+        note "Agent GUI Golden verificat: PID $(get restored), $stock."
+        /bin/rm -f "$t/armed"
+    fi
+    drop_mount || { note 'Demontarea normală a volumului Tahoe nu a fost confirmată. Poți reîncerca --revenire.'; return 1; }
+}
+finish() {
+    local result=$1 i
+    if [[ $result != kept && $result != recovery_required ]]; then unlock; fi
+    if [[ $result == kept ]]; then /bin/rm -f "$t/inainte" "$t/dupa" "$t/dupa_incalzire" "$t/preview.png"; fi
+    put result "$result"
+    if [[ $result != kept && $result != recovery_required ]]; then
+        for ((i=0;i<20;i++)); do [[ ! -f $t/ack ]] || break; /bin/sleep 1; done
+        /bin/rm -rf "$t"
+    fi
+}
+select_donor() {
+    bounded 35 /usr/bin/perl -e "$donor_code" -- "$@" 2>> "$t/events"
+}
+failure_details() {
+    local begin=$1 end pred
+    end=$(/bin/date '+%Y-%m-%d %H:%M:%S%z')
+    /bin/launchctl print "$job" 2>/dev/null |
+        /usr/bin/awk '/^	(state|pid|last exit code|last terminating signal|program) = / {print "GG_LAUNCHD " $0}' >> "$t/events"
+    pred='(process IN {"launchd","amfid","syspolicyd","kernel","ReportCrash","iconservicesagent","taskgated-helper"}) AND (eventMessage CONTAINS[c] "iconservicesagent" OR process == "iconservicesagent") AND (eventMessage CONTAINS[c] "signature" OR eventMessage CONTAINS[c] "denied" OR eventMessage CONTAINS[c] "not permitted" OR eventMessage CONTAINS[c] "Library not loaded" OR eventMessage CONTAINS[c] "symbol not found" OR eventMessage CONTAINS[c] "dyld" OR eventMessage CONTAINS[c] "invalid" OR eventMessage CONTAINS[c] "spawn" OR eventMessage CONTAINS[c] "exit")'
+    bounded 8 /usr/bin/log show --info --style compact --start "$begin" --end "$end" --predicate "$pred" 2>/dev/null |
+        /usr/bin/awk 'NR>1 && NR<=32 {print "GG_LAUNCH " substr($0,1,600)}' >> "$t/events"
+}
+trial_worker() {
+    local donor dev old active attempt point status begin limit=230 extended=0
+    root_gate || return 1
+    match_image "$t/orig" "$stock" || { note 'Agentul inițial nu rulează din Golden.'; return 1; }
+    old=$(get orig)
+    if ! donor=$(select_donor); then
+        dev=$(select_donor --device) || return 1
+        [[ $dev =~ ^/dev/disk[0-9]+s[0-9]+$ ]] || return 1
+        note "Montare temporară Tahoe în citire: $dev"
+        point="/Volumes/GG-Tahoe-${t##*.}"
+        /bin/mkdir -m 0755 "$point" || return 1
+        put mounted "$dev" && put mountpoint "$point" || { /bin/rmdir "$point"; return 1; }
+        bounded 75 /usr/sbin/diskutil mount readOnly nobrowse -mountPoint "$point" "$dev" >> "$t/events" 2>&1 || return 1
+        donor=$(select_donor) || return 1
+    fi
+    [[ $donor == /Volumes/*/System/Library/CoreServices/iconservicesagent && -f $donor ]] || return 1
+    put donor "$donor" || return 1
+    [[ $(registered_pid) == "$old" && ! -e $t/undo ]] || return 1
+    note "Agent Golden PID $old. Program Tahoe verificat: $donor"
+    begin=$(/bin/date '+%Y-%m-%d %H:%M:%S%z')
+    put armed yes || return 1
+    bounded 12 /bin/launchctl debug "$job" --program "$donor" > "$t/debug" 2>&1
+    status=$?
+    /bin/cat "$t/debug" >> "$t/events"
+    if (( status )); then
+        if (( status < 128 )) && /usr/bin/grep -Eiq 'not permitted|not supported|not allowed|denied|unrecognized|unknown option|invalid argument' "$t/debug" &&
+           match_image "$t/check" "$stock" && [[ $(get check) == "$old" ]]; then
+            note 'launchd a refuzat opțiunea pentru serviciu. Agentul Golden inițial a rămas activ.'
+            /bin/rm -f "$t/armed"
+        fi
+        failure_details "$begin"
+        return 1
+    fi
+    bounded 15 /bin/launchctl kickstart -k "$job" >> "$t/events" 2>&1 || :
+    await_image "$t/active" "$donor" "$old" || { note 'Pornirea efectivă a programului Tahoe nu s-a confirmat.'; failure_details "$begin"; return 1; }
+    put used yes || return 1
+    active=$(get active)
+    note "Agent Tahoe activ pe Golden B: PID $active."
+    put ready "$active"
+    for ((attempt=0;attempt<limit;attempt++)); do
+        [[ ! -f $t/undo ]] || return 1
+        if (( ! extended )) && [[ -f $t/retry ]]; then
+            limit=$((attempt+230))
+            extended=1
+        fi
+        if [[ -f $t/keep ]]; then
+            root_gate && match_image "$t/check" "$donor" "$old" && [[ $(get check) == "$active" ]] || return 1
+            note "Agent Tahoe păstrat pentru sesiunea curentă, PID $active."
+            return 0
+        fi
+        /bin/sleep 1
+    done
+    note 'Timpul probei a expirat.'
+    return 1
+}
+guardian() {
+    # This process is a detached session leader with stdin attached to /dev/null.
+    # It alone mounts, launches and rolls back, even if sudo/ssh loses its terminal.
+    trap 'exit 3' HUP INT TERM
+    trap 'trap - EXIT HUP INT TERM; if restore; then if [[ -f $t/restored ]]; then finish restored; else finish declined; fi; else finish recovery_required; fi' EXIT
+    [[ $(/usr/bin/readlink "$lock") == "$t" ]] || exit 2
+    put guardian "$$" || exit 3
+    if trial_worker; then
+        trap - EXIT
+        finish kept
+    fi
+}
+start_worker() {
+    local definitions
+    definitions=$(declare -f bounded registration field registered_pid image_path match_image await_image root_gate note put get unlock drop_mount restore finish select_donor failure_details trial_worker guardian)
+    /usr/bin/perl -MPOSIX -e '
+        my $p=fork(); die "$!\n" unless defined $p; exit 0 if $p;
+        POSIX::setsid() >= 0 or die "$!\n";
+        open STDIN,"<","/dev/null" or die; open STDOUT,">>","$ARGV[1]/events" or die;
+        open STDERR,">&",\*STDOUT or die;
+        exec "/bin/bash","-c",$ARGV[0],"gg-guardian",@ARGV[1..$#ARGV] or die;' \
+        "$definitions
+set -u; umask 077; t=\$1; job=\$2; plist=\$3; stock=\$4; lock=\$5; donor_code=\$6; guardian" \
+        "$t" "$job" "$plist" "$stock" "$lock" "$donor_code"
+}
+in_aqua() {
+    /bin/launchctl asuser 501 /usr/bin/sudo -n -H -u '#501' -- /bin/bash -c "$probe_code" golden-aqua "$@"
+}
+survey_apps() {
+    printf 'GG_PHASE %s\n' "$1"
+    in_aqua --apps || echo 'GG_APP_STATUS Verificarea pictogramelor aplicațiilor este incompletă.'
+}
+measure() {
+    local phase=$1
+    printf 'GG_PHASE %s\n' "$phase"
+    in_aqua --compare-clients | /usr/bin/tee "$t/$phase"
+    local rc=${PIPESTATUS[*]}
+    [[ $rc == '0 0' ]]
+}
+evidence() {
+    local file=$1 desired=$2
+    /usr/bin/awk -v want="$desired" '
+    BEGIN {retry=(want=="first_osa_timeout")}
+    $1=="GG_ICON_LOG" && $NF=="complete=1" {complete++}
+    $1=="GG_IDENTITATE" && $2=="Ruby_x86_64_fara_libhao=confirmat" &&
+        $3==(retry ? "osascript_cu_libhao=neconfirmat" : "osascript_cu_libhao=observat") {identified++}
+    $1=="GG_ICON" || (retry && $1=="GG_CLIENT") {
+        delete fields; for(i=2;i<=NF;i++){split($i,f,"=");fields[f[1]]=f[2]}
+        tag=fields["tag"]; if(tag !~ /^(ruby_first|ruby_repeat|osa_first|osa_repeat)$/) bad=1;
+        if($1=="GG_CLIENT") {
+            if(tag!="osa_first" && (fields["self"]!=fields["pid"] || fields["images"]+0<=0 ||
+               fields["arch"]!="x86_64" || fields["libhao"]!=(tag=="osa_repeat" ? "1" : "0"))) bad=1;
+            if(client_pid[tag]!="") bad=1;
+            client_pid[tag]=fields["pid"]; next
+        }
+        if(seen[tag]++ || pids[fields["pid"]]++ || fields["pid"] !~ /^[1-9][0-9]*$/ ||
+           fields["client_records"]+0<=0 || fields["icon_records"]+0<=0) bad=1;
+        if(retry && (client_pid[tag]!=fields["pid"] || fields["error4097"]!="0" ||
+           fields["endpoint_agent"]!="1" || fields["endpoint_store"]!="1")) bad=1;
+        if(retry && tag=="osa_first") {
+            if(fields["rc"]!="142" || fields["elapsed_ms"]+0<25000 ||
+               fields["evidence"]!="request_failed" || fields["tiff_bytes"]!="0") bad=1;
+        } else {
+            if(fields["rc"]!="0" || fields["evidence"]!=(retry ? "visible_no_4097" : want) ||
+               fields["tiff_bytes"]+0<=0 || (want=="observed_4097" && fields["error4097"]+0<=0) ||
+               (want=="visible_no_4097" && fields["error4097"]!="0")) bad=1;
+        }
+        n++
+    }
+    END {exit !(n==4 && complete==1 && identified==1 && !bad)}
+    ' "$file"
+}
+pixels() {
+    # Decode the native client preview locally on Golden. Compare BMP pixel bytes
+    # only; PNG encoder metadata, profiles and timestamps may differ by request.
+    local phase=$1 tag=$2 n
+    n=$( /usr/bin/awk -v name="$tag" '$1=="GG_CLIENT_PNG" && $2==name {n++} END{print n+0}' "$t/$phase" )
+    [[ $n == 1 ]] || return 1
+    /usr/bin/awk -v name="$tag" '$1=="GG_CLIENT_PNG" && $2==name {print $3}' "$t/$phase" |
+        /usr/bin/base64 -D > "$t/preview.png" || return 1
+    # Image content is decoded with the console user's normal privileges. Pipe
+    # the result back into a root-owned file, never give this user a path in /var/run.
+    /usr/bin/sudo -n -H -u '#501' -- /usr/bin/perl -MMIME::Base64 -e '
+        use File::Temp qw(tempdir); my $d=tempdir(DIR=>"/private/tmp", CLEANUP=>1);
+        open(my $f,">","$d/i.png") or die; binmode $f; local $/; print $f <STDIN>; close $f or die;
+        system("/usr/bin/sips","-s","format","bmp","$d/i.png","--out","$d/o.bmp")==0 or exit 2;
+        open(my $b,"<","$d/o.bmp") or die; binmode $b; my $v=<$b>;
+        exit 2 unless substr($v,0,2) eq "BM" && length($v)>54;
+        my ($off,$hdr,$w,$h,$planes,$bpp)=unpack("x10VVVVvv",$v);
+        exit 2 unless $hdr>=40 && $w==64 && ($h==64 || $h==4294967232) && $planes==1 && ($bpp==24 || $bpp==32)
+          && $off>=54 && length($v)>=$off+64*64*($bpp/8);
+        require Digest::SHA; print "GG_PIXELS ", Digest::SHA::sha256_hex(substr($v,$off,64*64*($bpp/8))),"\n";
+    ' < "$t/preview.png" | /usr/bin/awk '$1=="GG_PIXELS" && length($2)==64 {print $2}'
+}
+stable_pixels() {
+    local a b
+    a=$(pixels "$1" ruby_first) && b=$(pixels "$1" ruby_repeat) &&
+        [[ $a =~ ^[0-9a-f]{64}$ && $a == "$b" ]] && printf '%s\n' "$a"
+}
+known_applications_icon() {
+    # Native 64px Applications previews from this MacBook: first Tahoe, then Golden B with the Intel agent.
+    [[ $1 == d30ddb3c6d0237d4ce0e901f7e81a6365a8e22f965ced00846ebb1166a9de0da ||
+       $1 == b1d414d69a9adefba3426d59e425571acee0a3a67cb0d65f59e3845536ad318a ]]
+}
+donor_still_active() {
+    [[ -f $t/ready && ! -e $t/result && ! -e $t/undo ]] &&
+        match_image "$t/measured_pid" "$(get donor)" "$(get orig)" &&
+        [[ $(get measured_pid) == "$(get ready)" ]]
+}
+icon_improved() {
+    known_applications_icon "$1" || [[ -n $before && $1 != "$before" ]]
+}
+verify_after() {
+    local first_pixels=
+    phase=dupa
+    donor_still_active || return 1
+    if ! measure "$phase"; then
+        evidence "$t/$phase" first_osa_timeout && first_pixels=$(stable_pixels "$phase") &&
+            icon_improved "$first_pixels" && donor_still_active || return 1
+        put retry yes || return 1
+        phase=dupa_incalzire
+        echo 'GG_AGENT Prima cerere a atins 25 s. Celelalte trei au răspuns fără 4097. Repet toate patru cu același agent deja pornit.'
+        measure "$phase" || return 1
+    fi
+    evidence "$t/$phase" visible_no_4097 && after=$(stable_pixels "$phase") &&
+        icon_improved "$after" && [[ -z $first_pixels || $after == "$first_pixels" ]] && donor_still_active
+}
+show_events() { [[ ! -f $t/events ]] || /bin/cat "$t/events"; }
+wait_result() {
+    local n result
+    for ((n=0;n<125;n++)); do [[ ! -f $t/result ]] || break; /bin/sleep 1; done
+    result=$(get result)
+    show_events
+    printf 'GG_REZULTAT %s\n' "${result:-neconfirmat}"
+    case "$result" in
+        restored) : > "$t/ack"; return 0;;
+        declined) : > "$t/ack"; return 3;;
+        kept) return 0;;
+        *) return 3;;
+    esac
+}
+undo() {
+    local tx result
+    if [[ ! -L $lock ]]; then
+        if [[ ! -e $lock ]] && tx=$(registered_pid) && [[ $(image_path "$tx") -ef $stock ]]; then
+            echo "GG_REZULTAT agent_Golden_deja_activ PID=$tx"
+            return 0
+        fi
+        echo 'GG_REZULTAT Lipsesc informațiile necesare pentru o revenire verificată.'
+        return 3
+    fi
+    t=$(/usr/bin/readlink "$lock")
+    [[ $t =~ ^/private/var/run/gg-icon-b\.[a-zA-Z0-9]{8}$ && ! -L $t && -d $t &&
+       $(/usr/bin/stat -f '%u:%Lp' "$t") == 0:700 ]] || return 3
+    : > "$t/undo"
+    result=$(get result)
+    if [[ $result == kept || $result == recovery_required ]]; then
+        /bin/mkdir "$t/recovering" || { echo 'GG_REZULTAT Revenire deja în curs.'; return 3; }
+        if restore; then
+            show_events
+            unlock
+            /bin/rm -rf "$t"
+            echo 'GG_REZULTAT restored'
+            return 0
+        fi
+        show_events
+        /bin/rmdir "$t/recovering"
+        echo 'GG_REZULTAT recovery_required'
+        return 3
+    fi
+    wait_result || return $?
+    if [[ $(get result) == kept ]]; then undo; fi
+}
+# The active one-shot may appear as the effective program in launchctl print.
+if [[ -L $lock ]]; then
+    t=$(/usr/bin/readlink "$lock")
+    [[ $t =~ ^/private/var/run/gg-icon-b\.[a-zA-Z0-9]{8}$ && ! -L $t && -d $t &&
+       $(/usr/bin/stat -f '%u:%Lp' "$t") == 0:700 ]] || exit 3
+fi
+root_gate || { echo 'GG_REZULTAT Identitatea Golden B sau serviciul GUI înregistrat diferă.'; exit 2; }
+if [[ $1 == undo ]]; then undo; exit $?; fi
+if [[ $1 == bars ]]; then
+    [[ -L $lock && $(get result) == kept ]] || { echo 'GG_REZULTAT Sesiunea cu agentul Intel păstrat nu a fost găsită.'; exit 3; }
+    start=$(/bin/date '+%Y-%m-%d %H:%M:%S%z')
+    gg_refresh_bars
+    rc=$?
+    if (( rc == 0 )); then
+        /bin/sleep 4
+        graphics_log_reference "$start" "$(/bin/date '+%Y-%m-%d %H:%M:%S%z')" bars | /usr/bin/sed 's/^/GG_BAR_LOG /'
+    fi
+    exit "$rc"
+fi
+[[ $1 == apply ]] || exit 2
+if [[ -L $lock && $(get result) == kept ]] && pid=$(registered_pid) &&
+   [[ $pid == "$(get ready)" ]] && path=$(image_path "$pid") &&
+   [[ $path -ef "$(get donor)" && $(registered_pid) == "$pid" ]]; then
+    echo 'GG_AGENT Agentul Intel este deja activ. Verific indexurile și pictogramele în sesiunea curentă.'
+    in_aqua --index || echo 'GG_INDEX_STATUS Verificarea indexurilor este incompletă.'
+    survey_apps aplicatii_active
+    exit 0
+fi
+[[ ! -e $lock && ! -L $lock ]] || { echo 'GG_REZULTAT Există deja o probă. Folosește --revenire.'; exit 2; }
+t=$(/usr/bin/mktemp -d /private/var/run/gg-icon-b.XXXXXXXX) || exit 2
+trap '/bin/rm -rf "$t"' EXIT
+echo 'GG_AGENT Se verifică problema inițială în sesiunea utilizatorului.'
+match_image "$t/baseline_pid" "$stock" || { echo 'GG_REZULTAT Agentul Golden inițial nu a fost confirmat.'; exit 3; }
+in_aqua --index || echo 'GG_INDEX_STATUS Verificarea indexurilor este incompletă.'
+survey_apps aplicatii_inainte
+if ! measure inainte; then
+    echo 'GG_REZULTAT Măsurarea inițială este incompletă. Agentul activ a fost păstrat.'
+    exit 3
+fi
+if evidence "$t/inainte" visible_no_4097 && before=$(stable_pixels inainte) &&
+   known_applications_icon "$before" && match_image "$t/initial_healthy" "$stock" &&
+   [[ $(get baseline_pid) == "$(get initial_healthy)" ]]; then
+    echo "GG_REZULTAT Agentul Golden PID $(get initial_healthy) livrează deja pictograma Aplicații verificată. Patru cereri au reușit fără 4097."
+    exit 0
+fi
+if ! evidence "$t/inainte" observed_4097; then
+    echo 'GG_REZULTAT Cele patru cereri inițiale nu confirmă eroarea în ambii clienți. Oprit.'
+    exit 3
+fi
+if ! before=$(stable_pixels inainte); then
+    before=
+    echo 'GG_AGENT Cele patru cereri confirmă 4097. Previzualizarea inițială lipsește sau variază. Pentru păstrare se cere o pictogramă finală deja verificată pe acest MacBook.'
+fi
+/bin/ln -sh "$t" "$lock" || exit 3
+# A static lock symlink must never be treated as a directory if another run won.
+[[ $(/usr/bin/readlink "$lock") == "$t" ]] || exit 3
+trap 'put undo yes' EXIT
+if ! start_worker; then unlock; /bin/rm -rf "$t"; trap - EXIT; exit 3; fi
+for ((n=0;n<220;n++)); do [[ ! -e $t/ready && ! -e $t/result ]] || break; /bin/sleep 1; done
+if [[ -e $t/ready && ! -e $t/result ]]; then
+    echo "GG_AGENT Începe comparația. Executabilul Tahoe este activ cu PID $(get ready)."
+    if verify_after; then
+        printf 'GG_AGENT Patru cereri au reușit fără 4097. Cele două previzualizări finale coincid.\n'
+        if known_applications_icon "$after"; then
+            echo 'GG_AGENT Pictograma Aplicații coincide cu una dintre imaginile verificate pe acest MacBook. Agentul se păstrează pentru această sesiune. Revenire: --revenire.'
+            put keep yes
+        else
+            printf 'Verifică previzualizarea %s-ruby_first pe iMac. Dacă pictograma Aplicații este corectă și vrei să păstrezi agentul în sesiunea Golden B, scrie d și Enter acum (30 s).\n' "$phase"
+            reply=
+            if IFS= read -r -t 30 reply </dev/tty && [[ $reply == d ]]; then
+                put keep yes
+            else
+                put undo yes
+            fi
+        fi
+    else
+        echo 'GG_AGENT Criteriul de ameliorare nu a fost îndeplinit. Revenire automată.'
+        put undo yes
+    fi
+else
+    if [[ ! -f $t/result ]]; then put undo yes; fi
+fi
+wait_result
+rc=$?
+trap - EXIT
+if [[ $(get result) == kept ]]; then
+    survey_apps aplicatii_dupa
+    if ! match_image "$t/check_final" "$(get donor)" "$(get orig)" || [[ $(get check_final) != "$(get ready)" ]]; then
+        echo 'GG_APP_STATUS Agentul Intel s-a schimbat în timpul verificării aplicațiilor.'
+    fi
+fi
+exit "$rc"

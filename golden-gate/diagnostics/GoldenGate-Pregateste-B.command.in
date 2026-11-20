@@ -1,0 +1,377 @@
+#!/bin/sh
+printf '%s\n' 'Șablon A/B. Completează profilul local înainte de utilizare.' >&2
+exit 78
+# GG_BEGIN_SOURCE
+#!/usr/bin/python3
+"""Pregătește în loc imaginea locală B pentru prima pornire pe MacBookPro9,1."""
+import fcntl
+import hashlib
+import inspect
+import json
+import os
+import plistlib
+import re
+import runpy
+import stat
+import subprocess
+import sys
+import tempfile
+import time
+import uuid
+from contextlib import contextmanager
+from pathlib import Path
+
+verify = runpy.run_path(str(Path(__file__).resolve().with_name("GoldenGate-Verifica-B.command")))
+IMAGE, GROUP, WANTED = (verify[k] for k in ("IMAGE", "GROUP", "WANTED"))
+run, plist, only, volume = (verify[k] for k in ("run", "plist", "only", "volume"))
+HDI, DISK = verify["HDI"], verify["DISK"]
+ORIGINAL_SHA = "35eeb62d4558ac7e094d40841e8964778001fe0cf499bce1c760a9cb5cb1c465"
+
+
+def sha(path):
+    h = hashlib.sha256()
+    with path.open("rb") as f:
+        for block in iter(lambda: f.read(8 * 1024 * 1024), b""):
+            h.update(block)
+    return h.hexdigest()
+
+
+def add_rules(content, wanted):
+    """Preserve the original file and accept an existing rule only if unambiguous."""
+    rows = [line.split(b"#", 1)[0].split() for line in content.splitlines()]
+    lines = []
+    for i, value in enumerate(wanted):
+        key = b"UUID="+value.encode("ascii")
+        if any(r and r[0].lower() in ([b"/dev/@@BSD_NTFS@@", b"/dev/r@@BSD_NTFS@@"] if i == 0 else [b"/dev/@@BSD_EXFAT@@", b"/dev/r@@BSD_EXFAT@@"]) for r in rows):
+            raise ValueError("Regulă existentă pe nume de dispozitiv, destinație ambiguă.")
+        matches = [r for r in rows if r and r[0].upper() == key]
+        if matches:
+            if (len(matches) != 1 or len(matches[0]) != 6 or matches[0][1:3] != [b"none", b"auto"] or
+                set(matches[0][3].split(b",")) != {b"ro", b"noauto"} or matches[0][4:] != [b"0", b"0"]):
+                raise ValueError("Regulă fstab conflictuală pentru "+value)
+        else:
+            lines.append(key+b" none auto ro,noauto 0 0\n")
+    sep = b"\n" if lines and content and not content.endswith(b"\n") else b""
+    return content + sep + b"".join(lines)
+
+
+def write_rules(mount, expected_device, wanted):
+    """Runs as root. All modifications are relative to a verified directory FD."""
+    import os, stat, secrets, ctypes
+    oflags = os.O_RDONLY | os.O_NOFOLLOW | os.O_DIRECTORY
+    fd = os.open("/", oflags)
+    try:
+        for part in mount.split("/")[1:]:
+            if not part or part in (".", ".."):
+                raise ValueError("Cale de montare nesigură.")
+            new = os.open(part, oflags, dir_fd=fd)
+            os.close(fd)
+            fd = new
+        if os.fstat(fd).st_dev != expected_device or os.stat(os.path.dirname(mount)).st_dev == expected_device:
+            raise ValueError("Volumul montat s-a schimbat.")
+        for part in ("private", "etc"):
+            new = os.open(part, oflags, dir_fd=fd)
+            os.close(fd)
+            fd = new
+            st = os.fstat(fd)
+            if st.st_dev != expected_device or st.st_uid != 0 or st.st_mode & 0o022:
+                raise ValueError("Directorul fstab are proprietar, drepturi sau volum neașteptat.")
+        content = b""
+        previous = None
+        try:
+            old = os.open("fstab", os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=fd)
+        except FileNotFoundError:
+            pass
+        else:
+            with os.fdopen(old, "rb") as h:
+                previous = os.fstat(h.fileno())
+                if (not stat.S_ISREG(previous.st_mode) or previous.st_dev != expected_device or
+                    previous.st_uid != 0 or previous.st_nlink != 1 or previous.st_size > 131072):
+                    raise ValueError("Identitatea fișierului fstab existent diferă.")
+                content = h.read(131073)
+                if len(content) != previous.st_size:
+                    raise ValueError("Conținutul fstab s-a schimbat în timpul citirii.")
+        updated = add_rules(content, wanted)
+        if previous and updated == content and previous.st_gid == 0 and stat.S_IMODE(previous.st_mode) == 0o644:
+            return
+        tmp = ".golden-fstab-" + secrets.token_hex(12)
+        out = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=fd)
+        try:
+            with os.fdopen(out, "wb") as h:
+                h.write(updated); h.flush()
+                os.fchown(h.fileno(), 0, 0)
+                os.fchmod(h.fileno(), 0o644)
+                os.fsync(h.fileno())
+            if previous:
+                now = os.stat("fstab", follow_symlinks=False, dir_fd=fd)
+                if (now.st_ino, now.st_mtime_ns, now.st_size) != (previous.st_ino, previous.st_mtime_ns, previous.st_size):
+                    raise ValueError("Fișierul inițial s-a schimbat.")
+                os.replace(tmp, "fstab", src_dir_fd=fd, dst_dir_fd=fd)
+            else:
+                rename = ctypes.CDLL(None, use_errno=True).renameatx_np
+                rename.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint]
+                if rename(fd, os.fsencode(tmp), fd, b"fstab", 4):  # RENAME_EXCL
+                    error = ctypes.get_errno()
+                    raise OSError(error, os.strerror(error))
+        finally:
+            try: os.unlink(tmp, dir_fd=fd)
+            except FileNotFoundError: pass
+    finally:
+        os.close(fd)
+
+
+RECEIPT = IMAGE.parent / "GoldenGate-B-personalizare.json"
+LOCK = IMAGE.parent / ".GoldenGate-B-personalizare.lock"
+MOUNT = IMAGE.parent / ".GoldenGate-B-montare"
+DISK_GUID = verify["DISK_GUID"]
+SUDO = "/usr/bin/sudo"
+
+
+def image_identity():
+    if IMAGE.resolve() != IMAGE:
+        raise RuntimeError("Calea imaginii B nu corespunde fișierului local.")
+    with os.fdopen(os.open(IMAGE, os.O_RDONLY | os.O_NOFOLLOW), "rb") as handle:
+        st = os.fstat(handle.fileno())
+        if not (stat.S_ISREG(st.st_mode) and st.st_uid == 0 and st.st_nlink == 1
+                and st.st_size == 80 * 1024**3):
+            raise RuntimeError("Tipul, proprietarul sau dimensiunea imaginii B diferă.")
+        handle.seek(512)
+        hdr = handle.read(92)
+        if hdr[:8] != b"EFI PART" or str(uuid.UUID(bytes_le=hdr[56:72])).upper() != DISK_GUID:
+            raise RuntimeError("UUID-ul GPT al imaginii nu corespunde.")
+    return {"image": str(IMAGE), "size": st.st_size, "inode": st.st_ino,
+            "birth": st.st_birthtime, "disk_uuid": DISK_GUID, "group_uuid": GROUP,
+            "source_sha256": ORIGINAL_SHA}
+
+
+def protected_file(path, flags):
+    fd = os.open(path, flags | os.O_NOFOLLOW | os.O_NONBLOCK, 0o600)
+    st = os.fstat(fd)
+    if not (stat.S_ISREG(st.st_mode) and st.st_uid == os.getuid()
+            and st.st_nlink == 1 and stat.S_IMODE(st.st_mode) == 0o600):
+        os.close(fd)
+        raise RuntimeError("Fișier local de stare necorespunzător: " + path.name)
+    return fd
+
+
+def read_receipt(identity):
+    try:
+        fd = protected_file(RECEIPT, os.O_RDONLY)
+    except FileNotFoundError:
+        return None
+    with os.fdopen(fd) as h:
+        data = json.load(h)
+    if (not isinstance(data, dict) or data.get("identity") != identity or
+        data.get("status") not in ("in-progress", "complete") or data.get("format") != 1):
+        raise RuntimeError("Raportul precedent nu corespunde acestei imagini B.")
+    return data
+
+
+def save_receipt(identity, status, **fields):
+    record = dict(format=1, identity=identity, status=status, **fields)
+    with tempfile.NamedTemporaryFile(mode="w", dir=RECEIPT.parent, delete=False) as h:
+        stage = Path(h.name)
+        try:
+            json.dump(record, h, indent=2, ensure_ascii=False)
+            h.write("\n")
+            h.flush()
+            os.fsync(h.fileno())
+            os.replace(stage, RECEIPT)
+            fd = os.open(RECEIPT.parent, os.O_RDONLY | os.O_DIRECTORY)
+            try:
+                os.fsync(fd)
+            finally:
+                os.close(fd)
+        finally:
+            stage.unlink(missing_ok=True)
+
+
+def image_attachment():
+    entries = [row for row in plist(HDI, "info", "-plist").get("images", [])
+               if row.get("image-path") and Path(row["image-path"]).resolve() == IMAGE]
+    if len(entries) > 1:
+        raise RuntimeError("Imaginea B are mai multe atașări active.")
+    return entries[0] if entries else None
+
+
+def gpt_device(entities):
+    return only((row["dev-entry"] for row in entities if row.get("content-hint") == "GUID_partition_scheme"
+                 and re.fullmatch(r"/dev/disk\d+", row.get("dev-entry", ""))),
+                "Discul GPT din imagine nu a putut fi identificat.")
+
+
+def detach_previous(active):
+    entities = active.get("system-entities", [])
+    whole = gpt_device(entities)
+    # Only recover our private mount point. A separate mount belongs to its operator.
+    mounts = []
+    for entry in entities:
+        node = entry.get("dev-entry")
+        if not node or not re.fullmatch(r"/dev/disk\d+(?:s\d+)*", node):
+            raise RuntimeError("Identificator necunoscut în atașarea anterioară.")
+        mount = plist(DISK, "info", "-plist", node).get("MountPoint") or entry.get("mount-point")
+        if mount and Path(mount) != MOUNT:
+            raise RuntimeError("Imaginea B este deja folosită la " + str(mount))
+        if mount:
+            mounts.append(node)
+    for node in mounts:
+        run(SUDO, "--", DISK, "unmount", node)
+    run(SUDO, "--", HDI, "detach", whole)
+
+
+def image_container(store):
+    for attempt in range(11):
+        entries = plist(DISK, "apfs", "list", "-plist")["Containers"]
+        matches = [c for c in entries if [s.get("DeviceIdentifier") for s in c.get("PhysicalStores", [])] == [store]]
+        if matches:
+            return only(matches, "Mai multe containere APFS sunt atribuite aceleiași partiții.")
+        if attempt < 10:
+            time.sleep(0.5)
+    raise RuntimeError("Containerul APFS al imaginii nu s-a înregistrat.")
+
+
+@contextmanager
+def attached(identity, readonly):
+    if image_identity() != identity or image_attachment():
+        raise RuntimeError("Imaginea B s-a schimbat sau a fost atașată separat.")
+    args = [SUDO, "--", HDI, "attach", "-readonly" if readonly else "-readwrite",
+            "-nomount", "-nobrowse", "-noautofsck", "-imagekey", "diskimage-class=CRawDiskImage",
+            "-plist", IMAGE]
+    entities = plistlib.loads(run(*args))["system-entities"]
+    whole = gpt_device(entities)
+    try:
+        active = image_attachment()
+        if (not active or gpt_device(active.get("system-entities", [])) != whole
+                or active.get("writeable") != (not readonly)):
+            raise RuntimeError("Identitatea sau modul atașării B nu corespunde.")
+        store = Path(whole).name + "s2"
+        container = image_container(store)
+        roles = {role: volume(container, role) for role in ("System", "Data", "Preboot", "Recovery", "VM")}
+        for role in ("System", "Data"):
+            info = plist(DISK, "info", "-plist", roles[role])
+            if (info.get("APFSVolumeGroupID", "").upper() != GROUP or
+                info.get("APFSContainerReference") != container["ContainerReference"] or
+                info.get("APFSSnapshot") or info.get("MountPoint")):
+                raise RuntimeError(f"Volumul {role} nu corespunde grupului B demontat.")
+        yield roles
+    finally:
+        run(SUDO, "--", HDI, "detach", whole)
+
+
+@contextmanager
+def mounted(node, readonly):
+    MOUNT.mkdir(mode=0o700, exist_ok=True)
+    st = MOUNT.lstat()
+    if (not stat.S_ISDIR(st.st_mode) or st.st_uid != os.getuid() or stat.S_IMODE(st.st_mode) != 0o700
+            or MOUNT.is_mount() or any(MOUNT.iterdir())):
+        raise RuntimeError("Directorul local de montare este ocupat sau diferă.")
+    opts = [DISK, "mount"] + (["readOnly"] if readonly else [])
+    run(SUDO, "--", *opts, "-mountOptions", "owners,nobrowse", "-mountPoint", MOUNT, node)
+    try:
+        info = plist(DISK, "info", "-plist", node)
+        if (Path(info.get("MountPoint", "")).resolve() != MOUNT or
+            bool(os.statvfs(MOUNT).f_flag & os.ST_RDONLY) != readonly):
+            raise RuntimeError("Punctul sau modul de montare diferă.")
+        yield MOUNT
+    finally:
+        run(SUDO, "--", DISK, "unmount", node)
+
+
+def check_preboot(node):
+    with mounted(node, True) as p:
+        boot = p / GROUP / "System/Library/CoreServices/boot.efi"
+        if not boot.is_file() or boot.is_symlink() or boot.stat().st_size != 723512:
+            raise RuntimeError("Încărcătorul Preboot al grupului B diferă.")
+
+
+def verify_image(identity):
+    with attached(identity, True) as roles:
+        with mounted(roles["Data"], True) as p:
+            f = p / "private/etc/fstab"
+            st = f.lstat()
+            if (not stat.S_ISREG(st.st_mode) or st.st_uid != 0 or st.st_gid != 0 or
+                stat.S_IMODE(st.st_mode) != 0o644 or not verify["check_rules"](f)):
+                raise RuntimeError("Verificarea fstab după reatașarea în regim de citire a eșuat.")
+        check_preboot(roles["Preboot"])
+
+
+def set_noauto(identity):
+    with attached(identity, False) as roles:
+        check_preboot(roles["Preboot"])
+        with mounted(roles["Data"], False) as p:
+            helper = inspect.getsource(add_rules) + "\n" + inspect.getsource(write_rules)
+            helper += "\nimport sys\nwrite_rules(sys.argv[1],int(sys.argv[2])," + repr(tuple(WANTED.values())) + ")"
+            subprocess.run([SUDO, "--", "/usr/bin/python3", "-I", "-B", "-c", helper, str(p),
+                            str(p.stat().st_dev)], check=True)
+
+
+def prepare(identity, graphics):
+    state = read_receipt(identity)
+    active = image_attachment()
+    if active and (not state or state["status"] != "in-progress"):
+        raise RuntimeError("Imaginea B este deja atașată. Închide montarea anterioară.")
+    if active:
+        detach_previous(active)
+    if state is None:
+        print("Verific SHA-256 al imaginii B existente (80 GiB)…", flush=True)
+        if sha(IMAGE) != ORIGINAL_SHA or image_identity() != identity:
+            raise RuntimeError("SHA-256 inițial diferă. Personalizarea nu a început.")
+    elif state["status"] == "complete":
+        print("Verific SHA-256 al imaginii B deja pregătite…", flush=True)
+        digest = sha(IMAGE)
+        if digest != state.get("sha256"):
+            raise RuntimeError("Amprenta imaginii s-a schimbat după personalizare.")
+        verify_image(identity)
+        if graphics(IMAGE) != state.get("graphics"):
+            raise RuntimeError("Configurația grafică diferă de raport.")
+        print("Imagine B verificată:", IMAGE, "\nSHA-256:", digest, "\nRaport:", RECEIPT)
+        return
+    else:
+        print("Reiau personalizarea înregistrată pentru aceeași imagine B.", flush=True)
+
+    before = graphics(IMAGE)
+    if state is None:
+        save_receipt(identity, "in-progress", graphics=before)
+    elif before != state.get("graphics"):
+        raise RuntimeError("Configurația EFI diferă de începutul personalizării.")
+    print("Aplic regulile noauto pe volumul Data al imaginii B…", flush=True)
+    set_noauto(identity)
+    verify_image(identity)
+    after = graphics(IMAGE)
+    if after != before or image_identity() != identity:
+        raise RuntimeError("Identitatea imaginii sau verificarea configurației grafice diferă.")
+    print("Calculez SHA-256 final după detașare…", flush=True)
+    digest = sha(IMAGE)
+    if digest == ORIGINAL_SHA:
+        raise RuntimeError("Amprenta imaginii a rămas identică după personalizare.")
+    save_receipt(identity, "complete", sha256=digest, graphics=after, noauto=WANTED, preboot_verified=True)
+    print("Imagine B pregătită:", IMAGE, "\nSHA-256:", digest, "\nRaport:", RECEIPT)
+
+
+def main():
+    if len(sys.argv) != 1 or os.geteuid() == 0:
+        raise RuntimeError("Rulează comanda din contul obișnuit, fără argumente și fără sudo în față.")
+    identity = image_identity()
+    build = json.loads((IMAGE.parent / "work/build.json").read_text())
+    if (build.get("status") != "assembled" or build.get("group_uuid") != GROUP
+            or build.get("configuration", {}).get("image") != str(IMAGE)):
+        raise RuntimeError("Manifestul de asamblare nu corespunde imaginii B.")
+    graphics = runpy.run_path(str(Path(__file__).resolve().with_name("golden_b_graphics.py")))["verify_graphics"]
+    plist(DISK, "info", "-plist", "/")
+    with os.fdopen(protected_file(LOCK, os.O_RDWR | os.O_CREAT), "r+b") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        print("Imagine locală B:", IMAGE, flush=True)
+        print("Introdu parola iMac-ului pentru acces la imagine.", flush=True)
+        subprocess.run([SUDO, "-v"], check=True)
+        prepare(identity, graphics)
+        if MOUNT.is_dir() and not MOUNT.is_mount() and not MOUNT.is_symlink():
+            MOUNT.rmdir()
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except subprocess.CalledProcessError as error:
+        sys.exit(f"Oprit. Comanda autorizată a ieșit cu codul {error.returncode}.")
+    except (OSError, ValueError, RuntimeError, KeyError, KeyboardInterrupt) as error:
+        sys.exit("Personalizare neconfirmată. " + str(error))

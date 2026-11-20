@@ -1,0 +1,153 @@
+#!/bin/sh
+printf '%s\n' 'Șablon A/B. Completează profilul local înainte de utilizare.' >&2
+exit 78
+# GG_BEGIN_SOURCE
+"""Verify the approved Golden B patch chain and the selected APFS snapshot."""
+import hashlib
+import json
+from pathlib import Path
+import re
+import stat
+import subprocess
+import sys
+
+
+GROUP = "@@UUID_B_GROUP@@"
+ORIGINAL = ("@@UUID_B_ORIGINAL_ID@@", "com.apple.bless.@@UUID_B_ORIGINAL_BLESS@@")
+DOCK_SNAPSHOT = ("@@UUID_B_DOCK_SNAPSHOT_ID@@", "com.apple.bless.@@UUID_B_DOCK_SNAPSHOT_BLESS@@")
+WINDOWS_SNAPSHOT = ("@@UUID_B_WINDOWS_SNAPSHOT_ID@@", "com.apple.bless.@@UUID_B_WINDOWS_SNAPSHOT_BLESS@@")
+RECORDS = Path("/private/var/db/hao/patches")
+DOCK = ("mbp91-dock-skylight", "usr/lib/hao/if/21acabfab6cc3ec9a3cf6d4d6b637f5a",
+        "a0bb9d28b8c3b030cbebd2b995d4470269e7c3955ff208b2f7fc5a1ded520a1f", 155)
+BATTERY = ("mbp91-battery-foundation", "usr/lib/hao/if/5119c02feccd3c209858a2d9e725c718",
+           "1a1220644804cd8b9ea448d9a55421dcd3742b8542862fc54c48d2c11541d48d", 408)
+WINDOWS = ("mbp91-window-skylight", DOCK[1], "cd2a77b0e61af60abd4c23e860809aad0af4837dc81886a600831379c2546b3f", 255)
+FINDER = ("mbp91-finder-iconservices", "System/Library/CoreServices/iconservicesagent",
+          "0c34b609f914b0f1e1e263268528e04715ce59d4de34770cba3af1d40d752de8", 243536)
+PREVIOUS_FILE = {WINDOWS: DOCK[2], FINDER: "cf1e92d68dcc75d290ad6ea693d04fc0d7a96d5b4be8d1ded6228751fa55bf82"}
+KINDS = {"dock": DOCK, "baterie": BATTERY, "ferestre": WINDOWS, "finder": FINDER}
+ATTRS = {"mode": "0644", "uid": 0, "gid": 0, "flags": []}
+AGENT_ATTRS = {"mode": "0755", "uid": 0, "gid": 0, "flags": ["restricted"]}
+
+
+def require(condition, message):
+    if not condition:
+        raise ValueError(message)
+
+
+def snapshot(row):
+    return row["uuid"], row["name"]
+
+
+def check_record(summary, parent, records_dir):
+    ident = summary["id"]
+    require(re.fullmatch(r"hao-\d{8}-\d{6}(?:-\d+)?", ident), "Identificator HAO nevalid.")
+    record = json.loads((records_dir / ident / "record.json").read_bytes())
+    known = [spec for spec in KINDS.values() if record["packs"] == [spec[0]]]
+    require(len(known) == 1, "Istoricul activ conține un alt pachet.")
+    spec = known[0]
+    pack, unit, digest, _ = spec
+    require(record["id"] == ident and record["backend"] == "macos-live" and
+            record["state"] == "applied" and record["packs"] == [pack] and
+            record["group"] == GROUP and record["privileged"] is True and
+            snapshot(record["snapshot_booted"]) == parent,
+            f"Înregistrarea HAO pentru {pack} sau snapshotul anterior diferă.")
+    require(len(record["files"]) == 1, "Înregistrarea nu descrie un singur fișier.")
+    f = record["files"][0]
+    attrs = AGENT_ATTRS if spec == FINDER else ATTRS
+    old_digest = PREVIOUS_FILE.get(spec)
+    require(f["path"] == unit and f["pack"] == pack and f["sha256"] == digest and
+            f["old_sha256"] == old_digest and
+            not f.get("pending") and not f["not_set"] and f["after"] == attrs,
+            f"Conținutul sau atributele înregistrate pentru {pack} diferă.")
+    if old_digest:
+        require(f.get("before") == attrs, f"Atributele fișierului dinainte de {pack} diferă.")
+        backup = records_dir / ident / "backup" / unit
+        require(not backup.is_symlink() and backup.is_file() and hashlib.sha256(backup.read_bytes()).hexdigest() == old_digest,
+                f"Copia HAO a fișierului înlocuit de {pack} diferă.")
+    after = snapshot(record["snapshot_after"])
+    require(after[0] != parent[0] and after[1] == record["snapshot"] == summary["snapshot"],
+            "Snapshotul din înregistrarea HAO diferă.")
+    return spec, after
+
+
+def check_file(root, spec):
+    pack, unit, digest, size = spec
+    path = root / unit
+    st = path.lstat()
+    require(stat.S_ISREG(st.st_mode) and st.st_size == size and stat.S_IMODE(st.st_mode) == (0o755 if spec == FINDER else 0o644) and
+            st.st_uid == st.st_gid == 0 and hashlib.sha256(path.read_bytes()).hexdigest() == digest,
+            f"Fișierul din snapshotul pornit nu corespunde pachetului {pack}.")
+    if spec == FINDER:
+        require(st.st_flags == 0x80000, "Agentul IconServices din snapshot are alte atribute.")
+        subprocess.run(["/usr/bin/codesign", "--verify", "--strict", "--architecture", "x86_64",
+                        "-R", '=anchor apple and identifier "com.apple.iconservicesagent"', str(path)], check=True)
+
+
+def check(mode, report, records_dir=RECORDS, root=Path("/"), kind="dock"):
+    require(kind in KINDS, "Pachet necunoscut.")
+    facts = report["facts"]
+    require(facts["group"] == GROUP and facts["from_snapshot"] and not facts["problems"],
+            "Grupul sau topologia APFS nu corespunde copiei Golden B.")
+    snaps = facts["snapshots"]
+    boot = snapshot(facts["booted"])
+    named = [snapshot(s) for s in snaps]
+    selected = [snapshot(s) for s in snaps if s["root_to"] is True]
+    require(len(selected) == 1 and named.count(boot) == 1, "Snapshotul pornit sau RootTo este ambiguu.")
+    history = report["records"]
+    require(all(r["state"] in ("applied", "reverted", "rolled-back") for r in history),
+            "HAO are o operație incompletă. Verificați jurnalul înainte de repornire.")
+    active = [r for r in history if r["state"] == "applied"]
+    chain = [ORIGINAL]
+    installed = []
+    for summary in active:
+        spec, after = check_record(summary, chain[-1], records_dir)
+        require(spec not in installed and (installed or spec == DOCK) and after not in chain,
+                "Ordinea pachetelor sau istoricul snapshoturilor diferă.")
+        if spec == FINDER:
+            require(WINDOWS in installed and WINDOWS_SNAPSHOT in chain,
+                    "Înregistrarea Finder nu descinde din snapshotul verificat pentru ferestre.")
+        installed.append(spec)
+        chain.append(after)
+    require(selected[0] == chain[-1] and boot in chain[-2:] and
+            all(named.count(s) == 1 for s in chain[-2:]),
+            "Snapshoturile curent, anterior și RootTo nu corespund istoricului HAO.")
+    level = chain.index(boot)
+    # Two approved packs address the same SkyLight unit. The newest record
+    # for each path on the *booted* snapshot defines its expected contents.
+    visible = {spec[1]: spec for spec in installed[:level]}
+    for spec in visible.values():
+        check_file(root, spec)
+    wanted = KINDS[kind]
+    if wanted != DOCK:
+        require(len(chain) >= 2 and chain[1] == DOCK_SNAPSHOT and level >= 1,
+                "Golden B trebuie pornit pe snapshotul verificat cu Dock funcțional.")
+    if wanted == FINDER:
+        require(WINDOWS in installed[:level] and WINDOWS_SNAPSHOT in chain[:level + 1],
+                "Golden B trebuie pornit pe snapshotul cu ferestre sau pe un descendent verificat.")
+    if wanted not in installed:
+        require(mode == "--check-pending" and boot == chain[-1], "Pachetul nu este încă înregistrat.")
+        print(f"GG_APLICARE Snapshotul de bază {boot[0]} și RootTo sunt confirmate.")
+        return 10
+    desired = installed.index(wanted) + 1
+    status = "activ după pornire" if level >= desired else "pregătit pentru repornire"
+    print(f"GG_APLICARE HAO {active[desired-1]['id']}; System={facts['system']['device']}; RootTo={selected[0][0]}; {status}.")
+    print(f"GG_APLICARE Snapshot anterior pentru revenire: {chain[-2][0]}.")
+    return 0
+
+
+def main():
+    if len(sys.argv) not in (2, 3) or sys.argv[1] not in ("--check-pending", "--after"):
+        return 2
+    probe = subprocess.run(["/usr/local/bin/hao", "patch", "--probe", "--log", "json"],
+                           stdout=subprocess.PIPE, timeout=90)
+    require(probe.returncode in (0, 3), "Inventarul APFS HAO nu a putut fi citit.")
+    return check(sys.argv[1], json.loads(probe.stdout), kind=sys.argv[2] if len(sys.argv) == 3 else "dock")
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except (KeyError, TypeError, OSError, ValueError, subprocess.SubprocessError) as exc:
+        print(f"GG_APLICARE Verificare incompletă: {exc}", file=sys.stderr)
+        sys.exit(3)

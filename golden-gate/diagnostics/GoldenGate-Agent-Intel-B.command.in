@@ -1,0 +1,167 @@
+#!/bin/sh
+printf '%s\n' 'Șablon A/B. Completează profilul local înainte de utilizare.' >&2
+exit 78
+# GG_BEGIN_SOURCE
+#!/usr/bin/python3
+"""Try the locally installed, Apple-signed Tahoe IconServices GUI agent on Golden B."""
+import os
+from pathlib import Path
+import runpy
+import shlex
+import subprocess
+import sys
+import tempfile
+
+HERE = Path(__file__).resolve().parent
+REFERENCE = runpy.run_path(str(HERE / "GoldenGate-Client-Intel-B.command"))
+SSH = runpy.run_path(str(HERE / "GoldenGate-Test-Cache-A-pe-B.command"))["SSH"]
+OUTPUT = REFERENCE["OUTPUT"]
+
+
+POST_LOGIN = r"""
+echo 'GG_SESIUNE Golden B confirmat. Verific bateria și conexiunea Wi-Fi din acest boot.'
+gg_read() { /usr/bin/perl -e 'alarm 8; exec @ARGV or die $!' "$@"; }
+batt=$(gg_read /usr/bin/pmset -g batt) || batt="Citire indisponibilă."
+printf '%s\n' "${batt:-Citire indisponibilă.}" | /usr/bin/sed 's/^/GG_BATERIE /'
+iface=$(LC_ALL=C gg_read /usr/sbin/networksetup -listallhardwareports | /usr/bin/awk '
+    /^Hardware Port:/ {wifi=($0 == "Hardware Port: Wi-Fi" || $0 == "Hardware Port: AirPort")}
+    wifi && /^Device: / {print $2; exit}')
+if [[ $iface =~ ^en[0-9]+$ ]]; then
+    addr=$(gg_read /usr/sbin/ipconfig getifaddr "$iface")
+    echo "GG_WIFI interfață=$iface IPv4=${addr:-absent}"
+    if [[ -n $addr ]]; then
+        result=$(/usr/bin/curl -q -4 --noproxy '*' --interface "$iface" --connect-timeout 4 \
+            --max-time 10 --silent --show-error --output /dev/null --write-out '%{local_ip} %{http_code}' \
+            https://www.apple.com/library/test/success.html)
+        rc=$?
+        if [[ $rc == 0 && $result == "$addr 200" ]]; then
+            echo "GG_WIFI HTTPS confirmat prin $iface."
+        else
+            echo "GG_WIFI HTTPS neconfirmat prin $iface (curl=$rc, sursă și răspuns: $result)."
+        fi
+    fi
+else
+    echo 'GG_WIFI Interfața Wi-Fi nu a fost identificată.'
+fi
+"""
+
+
+def remote(mode):
+    gate = REFERENCE["GATE"] + """
+[[ $uid == 501 && $(/usr/bin/id -un) == @@GUI_USER@@ ]] || exit 2
+"""
+    post_login = mode == "post-login"
+    if post_login:
+        mode = "apply"
+    probe = gate + """
+[[ $(/bin/launchctl managername) == Aqua ]] || exit 2
+export GG_ICON_NATIVE_SOURCE=""" + shlex.quote((HERE / "icon_native.rb").read_text()) + """
+source /dev/stdin <<'GG_REFERENCE'
+""" + (HERE / "icon_reference.sh").read_text() + """
+GG_REFERENCE
+if [[ $1 == --apps ]]; then
+    icon_reference --apps
+    exit $?
+fi
+source /dev/stdin <<'GG_FINDER_REFERENCE'
+""" + (HERE / "finder_reference.sh").read_text() + """
+GG_FINDER_REFERENCE
+if [[ $1 == --index ]]; then
+    source /dev/stdin <<'GG_INDEX'
+""" + (HERE / "finder_icon_index_status.sh").read_text() + """
+GG_INDEX
+    finder_icon_index_status
+    exit $?
+fi
+icon_reference --compare-clients
+icon_status=$?
+finder_pid=$(/usr/bin/pgrep -u "$uid" -x Finder 2>/dev/null)
+if [[ $finder_pid =~ ^[1-9][0-9]*$ ]]; then
+    state=$(/usr/bin/perl -e 'alarm 6; exec @ARGV or die $!' /usr/bin/arch -x86_64 \
+        /usr/bin/ruby --disable-gems -e """ + shlex.quote((HERE / "finder_windowserver_state.rb").read_text()) + """ -- "$finder_pid")
+    if [[ $state == "GG_FINDER_WS pid=$finder_pid "* && $finder_pid == "$(/usr/bin/pgrep -u "$uid" -x Finder 2>/dev/null)" ]]; then
+        printf '%s\\n' "$state"
+    else
+        echo 'GG_FINDER_WS state=unobserved'
+    fi
+    reply=$(/usr/bin/perl -e 'alarm 8; exec @ARGV or die $!' /usr/bin/arch -x86_64 \
+        /usr/bin/ruby --disable-gems -e """ + shlex.quote((HERE / "finder_ax_reply.rb").read_text()) + """ -- "$finder_pid")
+    if [[ $finder_pid == "$(/usr/bin/pgrep -u "$uid" -x Finder 2>/dev/null)" && $reply == "GG_AX pid=$finder_pid "* ]]; then
+        printf '%s\\n' "$reply"
+    else
+        echo 'GG_AX result=unobserved reason=pid_changed_or_no_reply'
+    fi
+    stack=$(set -o pipefail; /usr/bin/perl -e 'alarm 12; exec @ARGV or die $!' \
+        /usr/bin/sample "$finder_pid" 2 15 -file /dev/stdout 2>/dev/null | finder_reference_stack)
+    if [[ $? == 0 && -n $stack && $finder_pid == "$(/usr/bin/pgrep -u "$uid" -x Finder 2>/dev/null)" ]]; then
+        printf 'GG_FINDER_MAIN pid=%s %s\\n' "$finder_pid" "$stack"
+    else
+        echo 'GG_FINDER_MAIN result=unobserved'
+    fi
+else
+    echo 'GG_AX result=unobserved reason=no_unique_finder'
+fi
+exit "$icon_status"
+"""
+    if mode == "bars":
+        helpers = (HERE / "golden_b_bars.sh").read_text() + "\n" + (HERE / "graphics_log_reference.sh").read_text()
+    else:
+        helpers = ("probe_code=" + shlex.quote(probe) + "\ndonor_code=" +
+                   shlex.quote((HERE / "icon_tahoe_donor.pl").read_text()))
+    body = helpers + "\n" + (HERE / "icon_tahoe_trial.sh").read_text()
+    return (gate + (POST_LOGIN if post_login else "") +
+            "\n/bin/stty onlcr 2>/dev/null || :\nexec /usr/bin/sudo -p 'Parola de administrator pe Golden B:\n' -- " +
+            "/usr/bin/env -i PATH=/usr/bin:/bin:/usr/sbin:/sbin HOME=/var/root LC_ALL=C " +
+            "/bin/bash -c " + shlex.quote(body) + " gg-agent " + mode)
+
+
+def run_mode(mode):
+    prefix = "Golden-B-Bare-" if mode == "bars" else "Finder-Agent-Intel-B-"
+    folder = Path(tempfile.mkdtemp(prefix=prefix, dir=OUTPUT))
+    print("Raport pe iMac:", folder / "raport.txt", flush=True)
+    cmd = SSH + ["-tt", REFERENCE["HOST"], "/bin/bash -c " + shlex.quote(remote(mode))]
+    phase = None
+    intel_active = False
+    with (folder / "raport.txt").open("x") as report, subprocess.Popen(cmd, stdout=subprocess.PIPE) as p:
+        for line in p.stdout:
+            row = line.decode("utf-8", "replace").strip("\r\n")
+            if row == "GG_REZULTAT kept" or row.startswith("GG_AGENT Agentul Intel este deja activ."):
+                intel_active = True
+            if row.startswith("GG_PHASE "):
+                phase = row.split()[-1]
+            if row.startswith(("GG_CLIENT_PNG ", "GG_APP_PNG ")):
+                try:
+                    kind, tag, data = row.split(" ", 2)
+                    folder_icon = (kind == "GG_CLIENT_PNG" and phase in ("inainte", "dupa", "dupa_incalzire")
+                                   and tag in ("ruby_first", "ruby_repeat"))
+                    app_icon = (kind == "GG_APP_PNG" and phase in ("aplicatii_inainte", "aplicatii_dupa", "aplicatii_active")
+                                and tag in ("finder", "settings", "activity"))
+                    if not (folder_icon or app_icon):
+                        raise ValueError("etichetă necunoscută")
+                    path = REFERENCE["save_preview"](phase + "-" + tag, data, folder)
+                    row = "GG_PREVIEW " + str(path)
+                except (ValueError, OSError):
+                    row = "GG_PREVIEW PNG indisponibil pe iMac."
+            print(row, flush=True)
+            if row.startswith(("GG_", "Cerere ", "Oprit", "Service ")):
+                print(row, file=report, flush=True)
+        status = p.wait()
+        print("Cod de ieșire:", status, file=report)
+        return status, intel_active
+
+
+def main():
+    modes = {(): "apply", ("--dupa-boot",): "post-login", ("--revenire",): "undo",
+             ("--reimprospateaza-barele",): "bars"}
+    mode = modes.get(tuple(sys.argv[1:]))
+    if not mode or not sys.stdin.isatty():
+        sys.exit("Rulează din Terminal pe iMac. Opțiuni: --dupa-boot, --reimprospateaza-barele, --revenire.")
+    os.umask(0o077)
+    status, intel_active = run_mode(mode)
+    if mode == "post-login" and status == 0 and intel_active:
+        status, _ = run_mode("bars")
+    return status
+
+
+if __name__ == "__main__":
+    sys.exit(main())

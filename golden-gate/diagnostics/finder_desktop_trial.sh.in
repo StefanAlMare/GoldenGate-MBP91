@@ -1,0 +1,242 @@
+#!/bin/sh
+printf '%s\n' 'Șablon A/B. Completează profilul local înainte de utilizare.' >&2
+exit 78
+# GG_BEGIN_SOURCE
+#!/bin/bash
+# Sourced by the B-only SSH launcher. No Finder preference is written.
+
+gg_desktop_pid() {
+    local found
+    found=$(/usr/bin/pgrep -x -u "$(/usr/bin/id -u)" Finder) || return 1
+    [[ $found =~ ^[0-9]+$ ]] || return 1
+    printf '%s\n' "$found"
+}
+
+gg_desktop_args() {
+    /bin/ps -ww -p "$1" -o command=
+}
+
+gg_desktop_owner() {
+    local args
+    args=$(gg_desktop_args "$1") && [[ " $args " == *" -GoldenGateDesktopTrial $2 "* ]]
+}
+
+gg_desktop_verify() {
+    local args key
+    args=$(gg_desktop_args "$1") || return 1
+    [[ " $args " == *" -GoldenGateDesktopTrial $2 "* ]] || return 1
+    if [[ ${3:-} == windows ]]; then
+        [[ " $args " == *" -CreateDesktop NO "* ]]
+        return
+    fi
+    for key in ShowHardDrivesOnDesktop ShowExternalHardDrivesOnDesktop ShowMountedServersOnDesktop ShowRemovableMediaOnDesktop; do
+        [[ " $args " == *" -$key NO "* ]] || return 1
+    done
+}
+
+gg_desktop_empty() (
+    [[ -d /private/var/empty && -r /private/var/empty && -x /private/var/empty ]] || return 1
+    shopt -s nullglob dotglob
+    local files=(/private/var/empty/*)
+    (( ${#files[@]} == 0 ))
+)
+
+# Let the user relaunch a hung Finder from Force Quit. Only the next launch
+# receives the arguments. Preserve the job's ordinary executable and argv[0].
+finder_trial_next_launch() (
+    local old pid uid job token service_pid current_args program configured_args answer i
+    local profile=${1:-volumes} open_rc
+    local options=(-ShowHardDrivesOnDesktop NO -ShowExternalHardDrivesOnDesktop NO
+                   -ShowMountedServersOnDesktop NO -ShowRemovableMediaOnDesktop NO)
+    local binary=/System/Library/CoreServices/Finder.app/Contents/MacOS/Finder
+    local plist=/System/Library/LaunchAgents/com.apple.Finder.plist
+    uid=$(/usr/bin/id -u)
+    if [[ $profile == windows ]]; then
+        gg_desktop_empty || { echo 'GG_STOP /private/var/empty nu poate fi confirmat ca director gol și accesibil.'; return 2; }
+        options=(-CreateDesktop NO)
+    elif [[ $profile != volumes ]]; then
+        return 2
+    fi
+    job="gui/$uid/com.apple.Finder"
+    old=$(gg_desktop_pid) || { echo 'Finder nu are un PID unic la desktop.'; return 2; }
+    service_pid=$(/bin/launchctl print "$job" | /usr/bin/awk '$1=="pid" && $2=="=" {print $3; exit}')
+    current_args=$(gg_desktop_args "$old") || return 2
+    program=$(/usr/bin/plutil -extract Program raw -o - "$plist") || return 2
+    if [[ $program != "$binary" || $service_pid != "$old" || $current_args != "$binary" ]]; then
+        echo 'Procesul Finder sau argumentele sale diferă de lansarea standard. Proba s-a oprit.'; return 2
+    fi
+    if /usr/bin/plutil -extract ProgramArguments xml1 -o /dev/null "$plist" 2>/dev/null; then
+        configured_args=$(/usr/bin/plutil -extract ProgramArguments json -o - "$plist") || return 2
+        if [[ $configured_args != "[]" && $configured_args != "[\"$binary\"]" ]]; then
+            echo 'Finder are argumente suplimentare în configurație. Proba s-a oprit.'; return 2
+        fi
+    fi
+    token=$(/usr/bin/uuidgen) || return 2
+    /usr/bin/sudo -p 'Parola de administrator pe Golden:
+' -- /bin/launchctl debug "$job" -- "$binary" -GoldenGateDesktopTrial "$token" "${options[@]}" || {
+            echo 'launchd a refuzat proba. Finder nu a fost oprit.'; return 3
+        }
+    echo 'PREGĂTIT. Pe MacBook, dacă Finder nu copiază sau mută fișiere, alege Finder → Relansează în Închidere forțată. O singură dată.'
+    echo 'Argumentele temporare se consumă la următoarea lansare a serviciului Finder, chiar dacă se întrerupe SSH.'
+    for ((i=0;i<60;i++)); do
+        pid=$(gg_desktop_pid) || pid=
+        [[ -n $pid && $pid != "$old" ]] && break
+        /bin/sleep 1
+    done
+    if [[ -z $pid || $pid == "$old" ]]; then
+        echo 'Relansarea nu a fost observată. Argumentele pot fi încă pregătite pentru următoarea lansare.'; return 3
+    fi
+    gg_desktop_verify "$pid" "$token" "$profile" || {
+        echo 'Finder a pornit fără toate argumentele de probă confirmate. Rezultat neconcludent.'; return 3
+    }
+    if [[ $profile == windows ]]; then
+        echo "GG_FINDER_LANSARE pid_vechi=$old pid_nou=$pid CreateDesktop=NO"
+        echo 'La următoarea relansare obișnuită Finder revine la setările tale.'
+        gg_desktop_empty || { echo 'GG_STOP Directorul de probă nu mai este gol sau accesibil.'; return 3; }
+        open_rc=0
+        gg_desktop_open || open_rc=$?
+        echo "GG_FINDER_OPEN pid=$pid director=/private/var/empty rc=$open_rc"
+        [[ $(gg_desktop_pid) == "$pid" ]] || { echo 'GG_STOP Finder s-a relansat între timp.'; return 3; }
+        echo 'Pe MacBook, răspund atât fereastra directorului empty, cât și meniul Fișier (File)? Scrie d, n sau parțial și apasă Enter (60 s).'
+        answer=
+        IFS= read -r -t 60 answer || answer=
+        [[ $(gg_desktop_pid) == "$pid" ]] || { echo 'GG_STOP Finder s-a relansat în timpul observației.'; return 3; }
+        case "$answer" in
+            d|D) echo 'GG_FINDER_UI fereastra_si_meniul=da'; echo 'Poți continua să lucrezi în această sesiune.' ;;
+            n|N) echo 'GG_FINDER_UI fereastra_si_meniul=nu' ;;
+            parțial|partial|p|P) echo 'GG_FINDER_UI fereastra_si_meniul=partial' ;;
+            *) echo 'GG_FINDER_UI fereastra_si_meniul=neconfirmat' ;;
+        esac
+        if [[ $answer != d && $answer != D ]]; then
+            echo 'Pentru revenire, când ai terminat orice copiere sau mutare, poți relansa manual Finder în mod obișnuit.'
+        fi
+        return 0
+    fi
+    echo "Finder PID $pid a pornit cu cele patru opțiuni temporare. Încearcă ⌘N și meniul Vizualizare pe MacBook."
+    echo 'Dacă ajută, poți lucra în această sesiune. Pentru revenire, următoarea relansare obișnuită pornește cu setările tale.'
+    for i in 1 2; do
+        /bin/sleep 10
+        [[ $(gg_desktop_pid) == "$pid" ]] || { echo 'Finder s-a relansat din nou în interval.'; return 3; }
+        /bin/ps -p "$pid" -o pid,%cpu,state,etime
+    done
+    echo 'Au dispărut pictogramele volumelor și răspunde Finder? Scrie d, n sau parțial, apoi Enter (30 s).'
+    if IFS= read -r -t 30 answer; then
+        case "$answer" in
+            d|D) echo 'Observație vizuală: volume ascunse și Finder răspunde.' ;;
+            n|N) echo 'Observație vizuală: proba nu a îndeplinit ambele condiții.' ;;
+            *) echo 'Observație vizuală parțială sau neprecizată.' ;;
+        esac
+    fi
+    return 0
+)
+
+gg_desktop_quit() {
+    local target=$1 i
+    /usr/bin/perl -e 'alarm 6; exec @ARGV or die $!' /usr/bin/osascript -l JavaScript -e '
+        ObjC.import("AppKit");
+        function run(argv) {
+            const a = $.NSRunningApplication.runningApplicationWithProcessIdentifier(Number(argv[0]));
+            if (ObjC.unwrap(a.bundleIdentifier) !== "com.apple.finder" || !a.terminate)
+                throw Error("Finder nu a acceptat cererea normală de închidere.");
+        }' "$target" </dev/null || return 1
+    for ((i=0;i<12;i++)); do
+        [[ $(gg_desktop_pid) != "$target" ]] && return 0
+        /bin/sleep 1
+    done
+    echo 'Finder încă rulează după cererea normală de închidere.'; return 1
+}
+
+gg_desktop_open() {
+    /usr/bin/perl -e 'alarm 8; exec @ARGV or die $!' /usr/bin/open -a /System/Library/CoreServices/Finder.app /private/var/empty "$@"
+}
+
+gg_desktop_wait_pid() {
+    local pid i
+    for ((i=0;i<12;i++)); do
+        if pid=$(gg_desktop_pid); then printf '%s\n' "$pid"; return 0; fi
+        /bin/sleep 1
+    done
+    return 1
+}
+
+gg_desktop_restore() {
+    local token=$1 pid args
+    pid=$(gg_desktop_pid) || pid=
+    if [[ -n $pid ]]; then
+        args=$(gg_desktop_args "$pid") || return 1
+        if ! gg_desktop_owner "$pid" "$token"; then
+            [[ $args != *GoldenGateDesktopTrial* ]] || return 1
+            echo 'Finder este prezent fără marcajul probei.'; return 0
+        fi
+        gg_desktop_quit "$pid" || {
+            echo 'Închiderea normală a fost refuzată. La următoarea deconectare a contului și autentificare Finder va porni fără argumentele probei.'
+            return 1
+        }
+    fi
+    gg_desktop_open && pid=$(gg_desktop_wait_pid) && args=$(gg_desktop_args "$pid") &&
+        [[ -n $args && $args != *GoldenGateDesktopTrial* ]] || {
+        echo 'Relansarea obișnuită nu a putut fi confirmată. Deschide Finder din Dock.'; return 1
+    }
+    echo "Finder relansat obișnuit, PID $pid."
+}
+
+finder_desktop_trial() (
+    local uid group pid token commands args watchdog answer
+    uid=$(/usr/bin/id -u)
+    group=$(/usr/sbin/diskutil info -plist / | /usr/bin/plutil -extract APFSVolumeGroupID raw -o - -) || return 2
+    if [[ $uid == 0 || $uid != "$(/usr/bin/stat -f %u /dev/console)" || $(/bin/launchctl managername) != Aqua ||
+          $(/usr/sbin/sysctl -n hw.model) != MacBookPro9,1 || $(/usr/bin/sw_vers -buildVersion) != 26B131 ||
+          $group != @@UUID_B_GROUP@@ ]]; then
+        echo 'Proba cere utilizatorul conectat la desktop pe Golden B.'; return 2
+    fi
+    pid=$(gg_desktop_pid) && args=$(gg_desktop_args "$pid") && [[ -n $args ]] || {
+        echo 'Finder nu are un proces unic cu argumente vizibile.'; return 2
+    }
+    [[ $args != *GoldenGateDesktopTrial* && $args != *OnDesktop* ]] || {
+        echo 'Finder este deja pornit cu argumente pentru desktop.'; return 2
+    }
+    token=$(/usr/bin/uuidgen) || return 2
+    # This watchdog only acts on the marked Finder instance. A logout or a
+    # reboot also discards launch arguments. It never sets persistent defaults.
+    commands=$(declare -f gg_desktop_pid gg_desktop_args gg_desktop_owner gg_desktop_quit gg_desktop_open gg_desktop_wait_pid gg_desktop_restore)
+    /usr/bin/nohup /bin/bash -c "$commands"'
+        /bin/sleep 180
+        pid=$(gg_desktop_pid) && gg_desktop_owner "$pid" "$1" && gg_desktop_restore "$1"
+    ' golden "$token" </dev/null >/dev/null 2>&1 &
+    watchdog=$!
+    trap 'exit 4' HUP INT TERM
+    # Install the token literally: Bash 3 may release function locals before
+    # running the subshell EXIT trap. The watchdog will be a no-op after a
+    # successful restore, including if another trial starts in the meantime.
+    trap "rc=\$?; gg_desktop_restore '$token' || rc=5; exit \$rc" EXIT
+    echo 'Control: solicit închiderea normală a Finder. Dacă se afișează un dialog despre o copiere în curs, anulează închiderea.'
+    if ! gg_desktop_quit "$pid"; then
+        echo 'Finder nu s-a închis normal. Proba pentru ascunderea volumelor nu a început.'; return 3
+    fi
+    gg_desktop_open && pid=$(gg_desktop_wait_pid) || return 3
+    echo "Control PID $pid: timp de 20 s, încearcă meniul Vizualizare și observă pictogramele volumelor."
+    /bin/sleep 20
+    [[ $(gg_desktop_pid) == "$pid" ]] && gg_desktop_quit "$pid" || return 3
+    if gg_desktop_pid >/dev/null; then
+        echo 'Finder a fost relansat automat înainte de aplicarea argumentelor.'; return 3
+    fi
+    gg_desktop_open --args -GoldenGateDesktopTrial "$token" -ShowHardDrivesOnDesktop NO \
+        -ShowExternalHardDrivesOnDesktop NO -ShowMountedServersOnDesktop NO -ShowRemovableMediaOnDesktop NO &&
+        pid=$(gg_desktop_wait_pid) && gg_desktop_verify "$pid" "$token" || {
+        echo 'Argumentele de lansare nu au putut fi confirmate pe Finder.'; return 3
+    }
+    echo "Probă PID $pid: timp de 20 s, verifică dacă volumele au dispărut și dacă meniul Vizualizare răspunde."
+    /bin/sleep 20
+    gg_desktop_verify "$pid" "$token" || return 3
+    echo 'Au dispărut volumele și răspunde Finder? Tastează d și apasă Return în 25 s dacă vrei să păstrezi această sesiune. Cu Return sau fără răspuns revine la normal [d/N].'
+    if IFS= read -r -t 25 answer && [[ $answer == d || $answer == D ]]; then
+        if [[ $(gg_desktop_pid) != "$pid" ]] || ! gg_desktop_verify "$pid" "$token"; then return 3; fi
+        # Only cancel our still-running, direct watchdog job. A newly started
+        # Finder cannot inherit these options on a later launch.
+        if [[ $(jobs -p) != "$watchdog" ]] || ! kill "$watchdog" 2>/dev/null; then return 3; fi
+        trap - EXIT
+        echo 'Ai ales să păstrezi această sesiune Finder. Volumele revin la afișarea obișnuită la relansarea Finder sau la următoarea autentificare.'
+    else
+        echo 'Revin la lansarea obișnuită a Finder.'
+    fi
+)

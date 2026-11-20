@@ -1,0 +1,140 @@
+#!/bin/sh
+printf '%s\n' 'Șablon A/B. Completează profilul local înainte de utilizare.' >&2
+exit 78
+# GG_BEGIN_SOURCE
+#!/bin/bash
+# Remote coordinator. The launcher supplies the private stage as the console user.
+set -eu -o pipefail
+export PATH=/usr/bin:/bin:/usr/sbin:/sbin
+umask 077
+
+mode=${1:-}
+stage=${2:-}
+case "$mode" in apply|undo|status) ;; *) exit 2 ;; esac
+[[ $stage =~ ^/private/tmp/GG-cache-B\.[[:alnum:]]+$ && -d $stage && ! -L $stage ]] || exit 2
+uid=$(/usr/bin/id -u)
+[[ $uid == 501 && $uid == "$(/usr/bin/stat -f %u /dev/console)" &&
+   "$(/usr/bin/stat -f '%u:%Lp' "$stage")" == "$uid:700" &&
+   "$(/usr/sbin/sysctl -n hw.model)" == MacBookPro9,1 &&
+   "$(/usr/bin/sw_vers -buildVersion)" == 26B131 ]] || { echo 'Contul, modelul, buildul sau directorul de lucru diferă.'; exit 2; }
+group=$(/usr/sbin/diskutil info -plist / | /usr/bin/plutil -extract APFSVolumeGroupID raw -o - -)
+[[ $group == @@UUID_B_GROUP@@ ]] || { echo 'Volumul pornit diferă de Golden B.'; exit 2; }
+
+# Serialize complete apply / undo sequences across SSH connections, including
+# the intervals between the two independently journaled, privilege-separated steps.
+if [[ ${3:-} != locked ]]; then
+    temp=$(/usr/bin/getconf DARWIN_USER_TEMP_DIR)
+    [[ -d $temp && -O $temp && $temp =~ ^(/private)?/var/folders/[^/]+/[^/]+/T/?$ ]] || exit 2
+    exec /usr/bin/perl -MFcntl=:DEFAULT,:flock,:mode -e '
+        my $path = shift;
+        $^F = 128;
+        sysopen my $lock, $path, O_RDWR|O_CREAT|O_NOFOLLOW, 0600 or die "$path: $!";
+        my @s = stat($lock);
+        die "Lock nevalid\n" unless @s && S_ISREG($s[2]) && $s[4] == $< && !($s[2]&077);
+        flock($lock, LOCK_EX|LOCK_NB) or die "O altă probă de pictograme este deja activă.\n";
+        exec @ARGV or die "$!";
+    ' "${temp%/}/GoldenGate-icon-cache-B.lock" /bin/bash "$stage/gg_icon_trial.sh" "$mode" "$stage" locked
+fi
+if [[ -t 1 ]]; then /bin/stty onlcr 2>/dev/null || true; fi
+
+user_index() { /usr/bin/perl "$stage/gg_icon_user.pl" "$1" "$stage/store.index"; }
+store() { /usr/bin/sudo -- /usr/bin/perl "$stage/gg_icon_units.pl" "$@" ; }
+aqua() {
+    if [[ $(/bin/launchctl managername) == Aqua ]]; then "$@"
+    else /usr/bin/sudo -- /bin/launchctl asuser "$uid" /usr/bin/sudo -n -H -u "#$uid" -- "$@"; fi
+}
+
+measure() {
+    local phase=$1 rc=0
+    echo "GG_PHASE $phase"
+    echo "Cereri AppKit pentru volum și dosarul Aplicații ($phase)."
+    aqua /bin/bash "$stage/icon_reference.sh" || rc=$?
+    echo "GG_METRICS_RC $phase $rc"
+    # Log availability is independent of the state of the trial files.
+    return 0
+}
+
+restart_agent() {
+    local job="gui/$uid/com.apple.iconservices.iconservicesagent" before after attempt
+    before=$(/bin/launchctl print "$job" 2>/dev/null | /usr/bin/awk '$1=="pid" && $2=="="{print $3}') || before=
+    if ! /usr/bin/sudo -- /bin/launchctl kickstart -k "$job"; then
+        echo 'GG_AGENT_REFRESH inconclusive'
+        echo 'Agentul grafic nu a confirmat relansarea. Măsurarea sesiunii poate folosi cache-ul vechi.'
+        return 0
+    fi
+    for attempt in {1..12}; do
+        after=$(/bin/launchctl print "$job" 2>/dev/null | /usr/bin/awk '$1=="pid" && $2=="="{print $3}') || after=
+        if [[ $after =~ ^[1-9][0-9]*$ && $after != "$before" ]]; then
+            echo "GG_AGENT_REFRESH ok ${before:-necunoscut} $after"
+            return 0
+        fi
+        /bin/sleep 0.25
+    done
+    echo 'GG_AGENT_REFRESH inconclusive'
+}
+
+undo_trial() {
+    echo 'GG_PHASE revenire'
+    local old_state
+    # undo can finish an interrupted rollback even when status cannot call the
+    # state active or pending. Both helpers independently preserve foreign files.
+    old_state=$(user_index status) || old_state=necunoscut
+    user_index undo || { echo 'Revenire incompletă la index. Depozitul comun este păstrat.'; return 4; }
+    if [[ $old_state == *'GG_USER_STATE active'* || $old_state == necunoscut ]]; then restart_agent; fi
+    store rollback || { echo 'Unele fișiere trebuie păstrate. Jurnalul indică starea revenirii.'; return 4; }
+    echo 'GG_RESULT revenire_verificata'
+}
+
+echo "Golden B • 26B131 • UID $uid • $mode"
+if [[ $mode == status ]]; then
+    user_rc=0; store_rc=0
+    user_index status || user_rc=$?
+    store status || store_rc=$?
+    (( !user_rc && !store_rc ))
+    exit
+fi
+if [[ $mode == undo ]]; then undo_trial; exit; fi
+
+if ! initial=$(user_index status); then echo "$initial"; exit 3; fi
+echo "$initial"
+if ! global=$(store status); then echo "$global"; exit 3; fi
+echo "$global"
+if [[ $initial == *'GG_USER_STATE absent'* && $global == *'GG_STORE_STATE absent'* ]]; then
+    echo 'GG_PHASE agent_de_control'
+    restart_agent
+    measure inainte
+else
+    echo 'GG_PHASE reluare'
+    echo 'Există deja o stare a probei. Măsurarea de referință este cea din primul raport.'
+fi
+
+if ! store prepare "$stage"; then
+    echo 'GG_RESULT pregatire_incompleta'
+    if [[ $initial == *'GG_USER_STATE absent'* && $global == *'GG_STORE_STATE absent'* ]]; then
+        echo 'Pregătire întreruptă la prima aplicare. Încerc retragerea fișierelor nou introduse.'
+        store rollback || echo 'GG_RESULT revenire_incompleta'
+    else
+        echo 'Poți relua comanda sau folosi --revenire.'
+    fi
+    exit 4
+fi
+if ! user_index apply; then
+    echo 'Activarea indexului nu a fost confirmată. Verific starea și încerc revenirea.'
+    undo_trial || true
+    exit 4
+fi
+echo 'GG_PHASE index_activ'
+restart_agent
+measure dupa
+
+echo 'Pe MacBook, activează Finder din Dock, apasă ⌘N și încearcă meniul Vizualizare.'
+echo 'd = fereastra și meniul răspund, păstrează; p = parțial, păstrează; n = tot blocat, revino acum.'
+echo 'Scrie d, p sau n pe iMac și apasă Enter. După 90 s poți decide ulterior prin --revenire.'
+answer=
+if ! IFS= read -r -t 90 answer; then answer=; fi
+case "$answer" in
+    n|N) echo 'GG_FINDER blocat'; undo_trial ;;
+    d|D) echo 'GG_FINDER raspunde'; echo 'GG_RESULT pastrat' ;;
+    p|P) echo 'GG_FINDER partial'; echo 'GG_RESULT pastrat' ;;
+    *) echo 'GG_FINDER neconfirmat'; echo 'GG_RESULT in_asteptarea_observatiei' ;;
+esac

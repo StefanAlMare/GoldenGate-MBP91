@@ -1,0 +1,111 @@
+#!/bin/sh
+printf '%s\n' 'Șablon A/B. Completează profilul local înainte de utilizare.' >&2
+exit 78
+# GG_BEGIN_SOURCE
+#!/usr/bin/python3
+"""Compare the same AppKit icon request from two processes on Golden B."""
+import base64
+import os
+from pathlib import Path
+import re
+import runpy
+import shlex
+import struct
+import subprocess
+import sys
+import tempfile
+
+HERE = Path(__file__).resolve().parent
+OUTPUT = HERE.parents[2] / "outputs"
+HOST = "@@SSH_TARGET@@"
+GATE = runpy.run_path(str(HERE / "GoldenGate-Finder-B.command"))["GATE"]
+
+
+def remote_command():
+    native = (HERE / "icon_native.rb").read_text()
+    reference = (HERE / "icon_reference.sh").read_text()
+    language_file = HERE / "icon_language.sh"
+    language = language_file.read_text() if language_file.is_file() else ""
+    # Inner check runs after entering the existing desktop session as its owner.
+    inner = GATE + r"""
+[[ $uid == 501 && $(/usr/bin/id -un) == @@GUI_USER@@ && $(/bin/launchctl managername) == Aqua ]] || exit 2
+printf 'GG_SYSTEM model=%s build=%s machine=%s gui_uid=%s group=%s\n' "$(/usr/sbin/sysctl -n hw.model)" "$(/usr/bin/sw_vers -buildVersion)" "$(/usr/bin/uname -m)" "$uid" "$group"
+if [[ ! -x /usr/bin/ruby ]]; then echo 'GG_INCONCLUDENT Ruby de sistem lipsește.'; fi
+""" + language + r"""
+if declare -F gg_icon_language >/dev/null; then
+    echo 'GG_LANG_PHASE inainte'
+    (gg_icon_language) || echo 'GG_LANG status=indisponibil motiv=masurare_incompleta'
+else
+    echo 'GG_LANG status=indisponibil motiv=verificator_absent'
+fi
+""" + "export GG_ICON_NATIVE_SOURCE=" + shlex.quote(native) + "\n" + reference + r"""
+rc=0
+icon_reference --compare-clients || rc=$?
+if declare -F gg_icon_language >/dev/null; then
+    echo 'GG_LANG_PHASE dupa'
+    gg_icon_language | /usr/bin/awk '/^GG_LANG_CACHE / || /^GG_LANG_INDEX /'
+fi
+exit "$rc"
+"""
+    return GATE + r"""
+[[ $uid == 501 && $(/usr/bin/id -un) == @@GUI_USER@@ ]] || exit 2
+/bin/stty onlcr 2>/dev/null || true
+if [[ $(/bin/launchctl managername) == Aqua ]]; then
+    runner=(/bin/bash)
+else
+    runner=(/usr/bin/sudo -p 'Parola de administrator pe Golden, pentru accesul în Aqua:
+' -- /bin/launchctl asuser "$uid" /usr/bin/sudo -n -H -u "#$uid" -- /bin/bash)
+fi
+exec "${runner[@]}" -c """ + shlex.quote(inner) + " golden-client"
+
+
+def save_preview(tag, encoded, folder):
+    if len(encoded) > 64000:
+        raise ValueError("Previzualizare prea lungă.")
+    data = base64.b64decode(encoded, validate=True)
+    if (not 67 <= len(data) <= 48000 or data[:8] != b"\x89PNG\r\n\x1a\n" or
+            data[12:16] != b"IHDR" or struct.unpack(">II", data[16:24]) != (64,64) or
+            data[-8:] != b"IEND\xaeB`\x82"):
+        raise ValueError("Format de previzualizare nevalid.")
+    path = folder / ("Aplicatii-" + tag + ".png")
+    with path.open("xb") as f:
+        f.write(data)
+    return path
+
+
+def collect():
+    os.umask(0o077)
+    folder = Path(tempfile.mkdtemp(prefix="Finder-Client-Intel-B-", dir=OUTPUT))
+    print("Raport pe iMac:", folder / "raport.txt", flush=True)
+    msg = "Golden B | două cereri din fiecare client pentru /Applications."
+    print(msg, flush=True)
+    ssh = ["/usr/bin/ssh", "-tt", "-F", "/dev/null", "-o", "StrictHostKeyChecking=yes",
+           "-o", "UpdateHostKeys=no", "-o", "ClearAllForwardings=yes", "-o", "ForwardAgent=no",
+           "-o", "ForwardX11=no", "-o", "ConnectTimeout=8", "-o", "ServerAliveInterval=10",
+           "-o", "ServerAliveCountMax=3", HOST, "/bin/bash -c " + shlex.quote(remote_command())]
+    with (folder / "raport.txt").open("x") as report, subprocess.Popen(ssh, stdout=subprocess.PIPE) as child:
+        print(msg, file=report)
+        for raw in child.stdout:
+            row = raw.decode("utf-8", "replace").rstrip("\r\n")
+            if row.startswith("GG_CLIENT_PNG "):
+                try:
+                    _, tag, encoded = row.split(" ", 2)
+                    if tag not in ("ruby_first", "ruby_repeat"):
+                        raise ValueError("Etichetă de previzualizare nevalidă.")
+                    row = "GG_PREVIEW Salvat pe iMac: " + str(save_preview(tag, encoded, folder))
+                except (ValueError, OSError):
+                    row = "GG_PREVIEW Date PNG indisponibile pentru această cerere."
+            print(row, flush=True)
+            if row.startswith("GG_") or row.startswith("Cerere "):
+                print(row, file=report, flush=True)
+        rc = child.wait()
+        print("Cod de ieșire:", rc, file=report)
+        if rc == 3:
+            print("Comparație incompletă. Raportul păstrează observațiile fiecărui PID.", flush=True)
+        return rc
+
+
+if __name__ == "__main__":
+    if len(sys.argv) != 1:
+        sys.exit("Lansează această probă fără argumente.")
+    sys.exit(collect())

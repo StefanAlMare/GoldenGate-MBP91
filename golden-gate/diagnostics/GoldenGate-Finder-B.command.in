@@ -1,0 +1,148 @@
+#!/bin/sh
+printf '%s\n' 'Șablon A/B. Completează profilul local înainte de utilizare.' >&2
+exit 78
+# GG_BEGIN_SOURCE
+#!/usr/bin/python3
+"""Capture the hung Finder on Golden B before any optional desktop trial."""
+import base64
+import hashlib
+import json
+import os
+from pathlib import Path
+import re
+import shlex
+import subprocess
+import sys
+import tempfile
+
+HERE = Path(__file__).resolve().parent
+OUTPUT = HERE.parents[2] / "outputs"
+
+GATE = """
+uid=$(/usr/bin/id -u)
+[[ $uid != 0 && $uid == "$(/usr/bin/stat -f %u /dev/console)" &&
+   $(/usr/sbin/sysctl -n hw.model) == MacBookPro9,1 &&
+   $(/usr/bin/sw_vers -buildVersion) == 26B131 ]] || { echo 'Modelul, buildul sau utilizatorul de la desktop diferă.'; exit 2; }
+group=$(/usr/sbin/diskutil info -plist / | /usr/bin/plutil -extract APFSVolumeGroupID raw -o - -)
+[[ $group == @@UUID_B_GROUP@@ ]] || { echo 'Grupul APFS pornit diferă de Golden B.'; exit 2; }
+"""
+
+CAPTURE = r"""
+echo 'Golden B confirmat. Începe captura Finder înainte de intervenție.'
+pid=$(/usr/bin/pgrep -u "$uid" -x Finder)
+if [[ ! $pid =~ ^[0-9]+$ ]]; then echo 'Finder nu are un singur PID în sesiunea activă.'; exit 3; fi
+start=$(/bin/date '+%Y-%m-%d %H:%M:%S%z')
+for pass in 1 2; do
+    [[ $(/usr/bin/pgrep -u "$uid" -x Finder) == "$pid" ]] || { echo 'PID Finder schimbat între capturi.'; exit 3; }
+    echo "Captură $pass, PID $pid, $(/bin/date '+%H:%M:%S %z')"
+    /bin/ps -p "$pid" -o pid,%cpu,state,etime,comm
+    finder_gpu_clients "$pid"
+    echo "GG_STACK $pass"
+    /usr/bin/perl -e 'alarm 24; exec @ARGV or die $!' /usr/bin/sample "$pid" 3 12 -file /dev/stdout 2>/dev/null |
+      /usr/bin/awk '/^Call graph:/{capture=1} /^(Total number in stack|Sort by top of stack|Binary Images:)/{if (capture) print "Total number in stack"; capture=0} capture'
+    sample_status=("${PIPESTATUS[@]}")
+    echo "GG_ENDSTACK $pass"
+    if (( sample_status[0] || sample_status[1] )); then echo "Captură parțială (sample=${sample_status[0]}, citire=${sample_status[1]})."; fi
+    [[ $pass != 1 ]] || /bin/sleep 2
+done
+[[ $(/usr/bin/pgrep -u "$uid" -x Finder) == "$pid" ]] || { echo 'Finder s-a relansat în timpul capturii.'; exit 3; }
+end=$(/bin/date '+%Y-%m-%d %H:%M:%S%z')
+display_reference
+graphics_log_reference "$start" "$end"
+"""
+
+
+def remote_command(mode):
+    if mode == "--verifica-index-b":
+        manifest = HERE.parents[1] / "patches/golden-gate-icon-caches/patch.json"
+        prefix = "Library/Caches/com.apple.iconservices.store/"
+        names = [item["path"][len(prefix):-7] for item in json.loads(manifest.read_text())["files"]
+                 if item["path"].startswith(prefix) and item["path"].endswith(".isdata")]
+        uuid = r"[\dA-F]{8}(?:-[\dA-F]{4}){3}-[\dA-F]{12}"
+        if len(set(names)) != 668 or not all(re.fullmatch(uuid, name, re.ASCII) for name in names):
+            raise ValueError("Manifestul local nu conține cele 668 de nume UUID așteptate.")
+        packed = b"".join(bytes.fromhex(n.replace("-", "")) for n in sorted(set(names)))
+        # The ordered UUIDs from the icon recipe in upstream 814ac10.
+        if hashlib.sha256(packed).hexdigest() != "b3e7f286365e44a00d2576ff21f540ad49c56ad135dab2a0387fc1a068bcffe0":
+            raise ValueError("Numele unităților diferă de manifestul de referință.")
+        encoded = base64.b64encode(packed).decode()
+        perl = (HERE / "finder_index.pl").read_text()
+        return GATE + """
+cache=$(/usr/bin/getconf DARWIN_USER_CACHE_DIR) || exit 3
+[[ $cache =~ ^(/private)?/var/folders/[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+/C/?$ ]] || { echo 'Cache utilizator indisponibil.'; exit 3; }
+""" + "exec /usr/bin/perl -e " + shlex.quote(perl) + " -- " + encoded + ' "${cache%/}/com.apple.iconservices" /Library/Caches/com.apple.iconservices.store'
+    modules = ["display_reference", "graphics_log_reference", "finder_gpu_clients"]
+    if mode == "--finder-pe-nvidia":
+        modules.append("finder_nvidia")
+    elif mode:
+        modules.append("finder_desktop_trial")
+    code = [GATE, '[[ $(/bin/launchctl managername) == Aqua ]] || exit 2']
+    for name in modules:
+        body = (HERE / (name + ".sh")).read_text()
+        code.append("source /dev/stdin <<'GG_MODULE'\n" + body + "\nGG_MODULE")
+    if mode == "--finder-pe-nvidia":
+        code.append("finder_nvidia")
+    elif mode == "--volume-la-relansare":
+        code.append("finder_trial_next_launch")
+    elif mode == "--ferestre-fara-desktop":
+        code.append("finder_trial_next_launch windows")
+    else:
+        code.append(CAPTURE)
+        if mode:
+            code.append("finder_desktop_trial")
+    body = shlex.quote("\n".join(code))
+    launch = """
+runner=(/bin/bash)
+if [[ $(/bin/launchctl managername) != Aqua ]]; then
+    runner=(/usr/bin/sudo -p 'Parola de administrator pe Golden:
+' -- /bin/launchctl asuser "$uid" /usr/bin/sudo -n -H -u "#$uid" -- /bin/bash)
+fi
+"""
+    return GATE + launch + 'exec "${runner[@]}" -c ' + body
+
+
+def run(mode, target):
+    os.umask(0o077)
+    directory = Path(tempfile.mkdtemp(prefix="Finder-B-", dir=OUTPUT))
+    print("Raport pe iMac:", directory / "raport.txt", flush=True)
+    ssh = ["/usr/bin/ssh", "-tt", "-F", "/dev/null", "-o", "StrictHostKeyChecking=yes",
+           "-o", "UpdateHostKeys=no", "-o", "ClearAllForwardings=yes", "-o", "ForwardAgent=no",
+           "-o", "ForwardX11=no", "-o", "ConnectTimeout=8", "-o", "ServerAliveInterval=10",
+           "-o", "ServerAliveCountMax=3", target, "/bin/bash -c " + shlex.quote(remote_command(mode))]
+    stack = None
+    try:
+        with (directory / "raport.txt").open("x") as report, subprocess.Popen(ssh, stdout=subprocess.PIPE) as proc:
+            for raw in proc.stdout:
+                row = raw.decode("utf-8", errors="replace").rstrip("\r\n")
+                mark = re.fullmatch(r"GG_STACK (1|2|Finder|WindowServer|iconservicesagent)", row)
+                if mark and stack is None:
+                    label = mark[1]
+                    filename = "Finder-" + label if label.isdigit() else label
+                    stack = (directory / (filename + ".sample")).open("x+")
+                elif stack and row.startswith("GG_ENDSTACK "):
+                    if label in ("1", "2", "Finder"):
+                        stack.seek(0)
+                        parsed = subprocess.run([str(HERE / "GoldenGate-Finder-Elgato.command"), "--parse-finder"],
+                                                stdin=stack, stdout=subprocess.PIPE, text=True)
+                        print(parsed.stdout.strip(), file=report, flush=True)
+                        print(parsed.stdout.strip(), flush=True)
+                    stack.close()
+                    stack = None
+                elif stack:
+                    print(row, file=stack)
+                else:
+                    print(row, file=report, flush=True)
+                    print(row, flush=True)
+            return proc.wait()
+    finally:
+        if stack:
+            stack.close()
+
+
+if __name__ == "__main__":
+    target = os.environ.get("GOLDEN_GATE_SSH", "@@SSH_TARGET@@")
+    if not re.fullmatch(r"[\w][\w.-]*@[\w][\w.-]*", target, re.ASCII):
+        sys.exit("Destinație SSH nevalidă.")
+    if sys.argv[1:] not in ([], ["--proba-volume"], ["--volume-la-relansare"], ["--ferestre-fara-desktop"], ["--finder-pe-nvidia"], ["--verifica-index-b"]):
+        sys.exit("Opțiuni: --finder-pe-nvidia, --proba-volume, --volume-la-relansare, --ferestre-fara-desktop sau --verifica-index-b.")
+    sys.exit(run(next(iter(sys.argv[1:]), ""), target))

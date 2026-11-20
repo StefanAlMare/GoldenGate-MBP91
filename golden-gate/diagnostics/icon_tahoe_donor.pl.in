@@ -1,0 +1,167 @@
+#!/bin/sh
+printf '%s\n' 'Șablon A/B. Completează profilul local înainte de utilizare.' >&2
+exit 78
+# GG_BEGIN_SOURCE
+#!/usr/bin/perl
+use strict;
+use warnings;
+use Cwd qw(realpath);
+use Encode qw(encode_utf8);
+use JSON::PP ();
+
+# This selector only reads. --device returns an unmounted System device, never a
+# mounted device or its Data partner. The caller owns any separate mount operation.
+my $tahoe_group = '@@UUID_TAHOE_GROUP@@';
+my $golden_group = '@@UUID_B_GROUP@@';
+
+sub capture {
+    my (@cmd) = @_;
+    open my $out, '-|', @cmd or die "pornire $cmd[0]: $!\n";
+    my $bytes = do { local $/; <$out> };
+    close $out or die "comanda $cmd[0] a esuat (status $?).\n";
+    return $bytes // '';
+}
+
+sub disk_plist {
+    my (@args) = @_;
+    my $json = capture('/bin/bash', '-o', 'pipefail', '-c',
+        '/usr/sbin/diskutil "$@" | /usr/bin/plutil -convert json -o - -- -',
+        'diskutil-plist', @args);
+    my $result = JSON::PP->new->utf8->decode($json);
+    ref $result eq 'HASH' or die "raspuns diskutil invalid.\n";
+    return $result;
+}
+
+sub info { disk_plist('info', '-plist', $_[0]) }
+
+sub group { uc($_[0]->{APFSVolumeGroupID} // '') }
+
+sub device {
+    my ($id) = @_;
+    defined $id && $id =~ /\Adisk[0-9]+(?:s[0-9]+)+\z/
+        or die "identificator APFS invalid.\n";
+    return "/dev/$id";
+}
+
+sub system_device {
+    my $inventory = disk_plist('apfs', 'list', '-plist');
+    my @matches;
+    for my $container (@{$inventory->{Containers} // []}) {
+        for my $vol (@{$container->{Volumes} // []}) {
+            my @roles = @{$vol->{Roles} // []};
+            next unless @roles == 1 && $roles[0] eq 'System';
+            my $path = device($vol->{DeviceIdentifier});
+            my $details = info($path);
+            next unless group($details) eq $tahoe_group;
+            push @matches, [$container, $path, $details];
+        }
+    }
+    @matches == 1 or die "grupul Tahoe intern are " . scalar(@matches) .
+        " volume System identificate (trebuie exact unul).\n";
+    my ($container, $path, $details) = @{$matches[0]};
+    $details->{Internal} && ($details->{FilesystemType} // '') eq 'apfs'
+        && ($details->{DeviceNode} // '') eq $path && !$details->{APFSSnapshot}
+        or die "identitatea volumului System Tahoe este neconfirmata.\n";
+    my @stores = @{$container->{PhysicalStores} // []};
+    @stores or die "suportul fizic APFS nu este identificat.\n";
+    my $physical = disk_plist('list', '-plist', 'internal', 'physical');
+    for my $store (@stores) {
+        my $store_path = device($store->{DeviceIdentifier});
+        my $s = info($store_path);
+        my $parent = $s->{ParentWholeDisk} // '';
+        $s->{Internal} && ($s->{DeviceNode} // '') eq $store_path
+            && $parent =~ /\Adisk[0-9]+\z/ or die "partitie fizica interna neconfirmata.\n";
+        my @whole = grep { ($_->{DeviceIdentifier} // '') eq $parent }
+            @{$physical->{AllDisksAndPartitions} // []};
+        @whole == 1 && (grep { ($_->{DeviceIdentifier} // '') eq $store->{DeviceIdentifier} }
+            @{$whole[0]->{Partitions} // []}) == 1
+            or die "suportul intern fizic pentru $path este neconfirmat.\n";
+    }
+    return ($path, $details);
+}
+
+sub select_mount {
+    my ($device, $details, $table, $device_only) = @_;
+    my @matches;
+    for my $line (split /\n/, $table) {
+        # A mounted APFS snapshot has the volume BSD name with one extra sN.
+        next unless $line =~ /\A(\Q$device\E(?:s[0-9]+)?) on (.+) \(([^()]*)\)\z/;
+        push @matches, [$1, $2, $3];
+    }
+    if ($device_only) {
+        !@matches && !$details->{Mounted} && !length($details->{MountPoint} // '')
+            or die "System Tahoe este deja montat; pastrez montarea existenta.\n";
+        return $device;
+    }
+    @matches or die "System Tahoe nu este montat; un volum Data nu furnizeaza agentul.\n";
+    @matches == 1 or die "mai multe montari pentru System Tahoe.\n";
+    my ($actual, $mount, $flags) = @{$matches[0]};
+    my %flag = map { $_ => 1 } split /,\s*/, $flags;
+    $mount =~ m{\A/Volumes/[^/[:cntrl:]]+\z} && $flag{apfs} && $flag{local}
+        && $flag{'read-only'} && !$flag{noexec}
+        or die "System Tahoe trebuie sa fie montat local, read-only si executabil sub /Volumes.\n";
+    (realpath($mount) // '') eq $mount or die "calea montata este redirectionata.\n";
+    my $here = info($mount);
+    group($here) eq $tahoe_group && $here->{Internal} && ($here->{DeviceNode} // '') eq $actual
+        && encode_utf8($here->{MountPoint} // '') eq $mount
+        or die "identitatea montarii Tahoe s-a schimbat.\n";
+    return $mount;
+}
+
+sub donor_program {
+    my ($mount) = @_;
+    my $core = "$mount/System/Library/CoreServices";
+    my $program = "$core/iconservicesagent";
+    (realpath($program) // '') eq $program && -f $program && -x $program
+        or die "lipseste executabilul obisnuit $program.\n";
+    my @st = stat($program);
+    $st[0] == (stat($mount))[0] && $st[4] == 0 && !($st[2] & 0022)
+        or die "provenienta fisierului de pe System Tahoe nu poate fi confirmata.\n";
+    my $plist = "$core/SystemVersion.plist";
+    (realpath($plist) // '') eq $plist && (stat($plist))[0] == $st[0]
+        or die "metadatele SystemVersion au alta origine.\n";
+    my ($version, $build) = map {
+        my $value = capture('/usr/bin/plutil', '-extract', $_, 'raw', '-o', '-', $plist);
+        chomp $value;
+        $value;
+    } qw(ProductVersion ProductBuildVersion);
+    $version =~ /\A26(?:\.\d+)*\z/ && $build =~ /\A25[A-Z][0-9]+[a-z]?\z/
+        or die "versiunea $version ($build) nu confirma Tahoe.\n";
+    my $format = capture('/usr/bin/file', '-b', $program);
+    $format =~ /Mach-O 64-bit executable x86_64\b/
+        or die "lipseste executabilul Mach-O x86_64 nativ.\n";
+    my $req = '=anchor apple and identifier "com.apple.iconservicesagent"';
+    capture('/usr/bin/codesign', '--verify', '--strict', '--architecture', 'x86_64',
+        '-R', $req, $program);
+    # Apple-signed code is immutable under the verified signature. Also reject
+    # HAO-linked slices explicitly before launch to make the comparison meaningful.
+    $st[7] > 0 && $st[7] <= 16 * 1024 * 1024 or die "dimensiunea agentului este neasteptata.\n";
+    open my $binary, '<:raw', $program or die "citire $program: $!\n";
+    my $bytes = do { local $/; <$binary> };
+    close $binary or die "citirea agentului a esuat.\n";
+    length($bytes) == $st[7] && index(lc($bytes), 'libhao') < 0
+        or die "imaginea agentului este incompleta sau contine o referinta libhao.\n";
+    print STDERR "GG_DONOR Tahoe $version ($build), System intern read-only, agent Apple x86_64 verificat.\n";
+    return $program;
+}
+
+sub main {
+    my $device_only = @_ == 1 && $_[0] eq '--device';
+    !@_ || $device_only or die "argument necunoscut.\n";
+    my $model = capture('/usr/sbin/sysctl', '-n', 'hw.model');
+    chomp $model;
+    $model eq 'MacBookPro9,1' && group(info('/')) eq $golden_group
+        or die "este necesara pornirea MacBookPro9,1 de pe Golden B.\n";
+    my ($device, $details) = system_device();
+    my $value = select_mount($device, $details, capture('/sbin/mount'), $device_only);
+    print(($device_only ? $value : donor_program($value)), "\n");
+}
+
+unless (caller) {
+    eval { main(@ARGV); 1 } or do {
+        my $reason = $@ || 'motiv necunoscut';
+        print STDERR "GG_DONOR $reason";
+        exit 2;
+    };
+}
+1;

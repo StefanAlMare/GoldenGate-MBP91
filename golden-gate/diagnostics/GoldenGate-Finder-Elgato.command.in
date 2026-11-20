@@ -1,0 +1,154 @@
+#!/bin/sh
+printf '%s\n' 'Șablon A/B. Completează profilul local înainte de utilizare.' >&2
+exit 78
+# GG_BEGIN_SOURCE
+#!/bin/bash
+# Experimental. Nicio probă fizică Elgato nu este documentată.
+set -u
+umask 077
+
+finder_stack() {
+    /usr/bin/perl -e '
+        use strict; use warnings;
+        my (@path, %top, %threads, $graph, $done, $thread, $total, $queue, $main, $trunk);
+        sub finish_path {
+            return unless @path;
+            my @names = map { $_->[1] } @path;
+            my $all = join(" ", @names);
+            my $icon = $queue =~ /iconservice|ISIcon/i || $all =~ /IconServices|ISConcreteIcon|ISIconCache/;
+            return unless $main || $icon;
+            my $group = $main ? "principal" : "secundar pictograme";
+            # Count of the observed leaf (one complete path), never sum nested frames.
+            my $leaf = $path[-1][2];
+            my @context = grep { /IconServices|ISConcreteIcon|ISIconCache|reply_sync|semaphore|mach_msg|RenderBox|Metal|TBrowser|MenuBar|FSKit|LiveFS|DiskArbitration|Metadata|LaunchServices/ } @names;
+            my @tail = @names > 4 ? @names[-4..-1] : @names;
+            my %seen;
+            my $description = join(" → ", grep { !$seen{$_}++ } (@context[0..($#context > 4 ? 4 : $#context)], @tail));
+            my $list=$top{$group} //= [];
+            push @$list, [$leaf,$total,$thread,$description] unless grep { $_->[2] eq $thread && $_->[3] eq $description } @$list;
+            @$list = sort { $b->[0] <=> $a->[0] } @$list;
+            pop @$list while @$list > 3;
+        }
+        while (<STDIN>) {
+            if (/^Call graph:/) { $graph=1; next }
+            next unless $graph;
+            if (/^Total number in stack|^Sort by top of stack|^Binary Images:/) {
+                unless ($done) { finish_path(); @path=(); $done=1 }; next
+            }
+            next if $done;
+            if (/^\s*(\d+) (Thread_(?:\d+|<multiple>))(.*)$/) {
+                finish_path(); @path=(); ($total,$thread,$queue)=($1,$2,$3);
+                $main=$queue =~ /com\.apple\.main-thread|\bMain Thread\b/i;
+                $threads{$thread}=1 if $main;
+                next;
+            }
+            next unless defined $thread && /^([\s+:|!]*)(\d+)\s+(.+?)\s{2,}\(in ([\w.+-]+)\)/;
+            my ($depth,$n,$sym,$image)=(length($1),$2,$3,$4);
+            $sym =~ s/[^[:alnum:]_+:\[\] .()?\$-]/_/g;
+            $sym=substr($sym,0,100)." [".$image."]";
+            if (@path && $depth <= $path[-1][0]) { finish_path(); pop @path while @path && $depth <= $path[-1][0] }
+            push @path,[$depth,$sym,$n];
+            if ($main && $n*2 >= $total && (!$trunk || $depth > $trunk->[0])) {
+                my @last=@path>4 ? @path[-4..-1] : @path;
+                $trunk=[$depth,$n,$total,join(" → ",map { $_->[1] } @last)];
+            }
+        }
+        if (!$graph || !keys(%threads) || !$done) { print "Stiva Finder nu a putut fi citită integral.\n"; exit 3 }
+        print "Traseu frecvent pe firul principal ($trunk->[1]/$trunk->[2]): $trunk->[3]\n" if $trunk;
+        for my $g ("principal","secundar pictograme") {
+            my $list=$top{$g}//[];
+            unless (@$list) { print "Finder, fir $g: fără traseu identificat.\n"; next }
+            for my $r (@$list) { printf "Finder, fir %s %s, %s/%s observații: %s\n",$g,$r->[2],$r->[0],$r->[1],$r->[3] }
+        }
+    '
+}
+
+hardware_summary() {
+    /usr/bin/perl -MJSON::PP -0777 -ne '
+        use strict; use warnings;
+        my $j=eval {decode_json($_)};
+        unless(ref($j) eq "HASH") { print "Inventarul hardware nu a putut fi decodat.\n"; exit 3 }
+        sub label { my ($s)=@_; return "necunoscut" unless defined($s) && !ref($s) && length($s); $s=~s/[\x00-\x1f\x7f]//g; return substr($s,0,96) }
+        my $devices=$j->{SPDisplaysDataType}//[];
+        my $count=0;
+        for my $gpu (@$devices) {
+            my $name=label($gpu->{sppci_model}//$gpu->{_name});
+            for my $d (@{$gpu->{spdisplays_ndrvs}//[]}) {
+                my $conn=label($d->{spdisplays_connection_type}//$d->{spdisplays_display_type});
+                my $screen=label($d->{_name});
+                my $res=label($d->{_spdisplays_pixels}//$d->{spdisplays_pixelresolution}//$d->{_spdisplays_resolution}//$d->{spdisplays_resolution});
+                my $online=label($d->{spdisplays_online});
+                print "System Information: ecran $screen | GPU $name | rezoluție $res | conexiune $conn | online $online\n"; ++$count;
+            }
+        }
+        print "System Information nu a asociat niciun ecran unui GPU.\n" unless $count;
+        my ($dock,$mouse)=(0,0);
+        sub visit {
+            my ($node,$bus,$under)=@_;
+            return unless ref($node) eq "HASH";
+            my $name=label($node->{device_name_key}//$node->{device_name}//$node->{_name});
+            my $vendor=label($node->{vendor_name_key}//$node->{vendor_name}//$node->{USBDeviceKeyVendorName}//$node->{manufacturer});
+            if ("$name $vendor" =~ /elgato/i) { print "$bus: dispozitiv $name | producător $vendor\n"; ++$dock; $under=1 }
+            if ($bus eq "USB" && $name =~ /mouse|trackball/i) { ++$mouse; print "USB: $name | ",($under ? "sub un nod identificat Elgato" : "cale Elgato neconfirmată"),"\n" }
+            for (@{$node->{_items}//[]}) { visit($_,$bus,$under) }
+        }
+        for (@{$j->{SPThunderboltDataType}//[]}) { visit($_,"Thunderbolt",0) }
+        for (@{$j->{SPUSBHostDataType}//$j->{SPUSBDataType}//[]}) { visit($_,"USB",0) }
+        print "Dock: marca Elgato nu apare explicit în inventarul returnat.\n" unless $dock;
+    '
+}
+
+sample_finder() {
+    local pid="$1" rc
+    echo "Captură Finder $2, PID $pid, $(/bin/date '+%H:%M:%S %z')"
+    /usr/bin/perl -e 'alarm 18; exec @ARGV or die $!' /usr/bin/sample "$pid" 2 12 -file /dev/stdout | finder_stack
+    rc=("${PIPESTATUS[@]}")
+    if ((rc[0] || rc[1])); then echo "Captură limitată (sample=${rc[0]}, decodor=${rc[1]})."; fi
+}
+
+target() {
+    local uid pid pass
+    uid=$(/usr/bin/id -u)
+    if [[ $(/usr/sbin/sysctl -n hw.model) != MacBookPro9,1 || $(/usr/bin/sw_vers -buildVersion) != 26B131 || $(/usr/bin/stat -f %u /dev/console) != "$uid" ]]; then
+        echo 'Este necesară sesiunea utilizatorului de pe Golden 26B131, MacBookPro9,1.'; return 2
+    fi
+    for pass in 1 2; do
+        pid=$(/usr/bin/pgrep -u "$uid" -x Finder | /usr/bin/head -1)
+        if [[ $pid =~ ^[0-9]+$ ]]; then sample_finder "$pid" "$pass"; else echo "Finder fără PID vizibil la captura $pass."; fi
+        [[ $pass == 2 ]] || /bin/sleep 2
+    done
+    echo 'GPU care conduce fiecare ecran în momentul interogării:'
+    /usr/bin/perl -e 'alarm 12; exec @ARGV or die $!' /usr/bin/osascript -l JavaScript -e '
+        ObjC.import("AppKit"); ObjC.import("CoreGraphics"); ObjC.import("Metal");
+        const screens=$.NSScreen.screens, lines=[];
+        for (let i=0;i<Number(screens.count);++i) {
+            const screen=screens.objectAtIndex(i);
+            const id=Number(screen.deviceDescription.objectForKey($("NSScreenNumber")).unsignedIntValue);
+            let gpu="indisponibil";
+            try { const dev=$.CGDirectDisplayCopyCurrentMetalDevice(id); const n=ObjC.unwrap(dev.name); if (n) gpu=String(n); } catch(e) {}
+            const type=$.CGDisplayIsBuiltin(id) ? "intern" : "extern";
+            const online=$.CGDisplayIsOnline(id) ? "da" : "nu";
+            lines.push("CoreGraphics: ecran "+type+" | "+String(ObjC.unwrap(screen.localizedName)).replace(/[\r\n\t]/g," ")+" | ID "+id+" | GPU "+gpu+" | "+$.CGDisplayPixelsWide(id)+" × "+$.CGDisplayPixelsHigh(id)+" | online "+online);
+        }
+        lines.length ? lines.join("\n") : "CoreGraphics: niciun ecran vizibil din sesiunea SSH.";
+    ' || echo 'CoreGraphics nu a putut furniza asocierea din sesiunea SSH.'
+    local available usb=SPUSBDataType
+    available=$(/usr/bin/perl -e 'alarm 5; exec @ARGV or die $!' /usr/sbin/system_profiler -listDataTypes)
+    [[ $available != *SPUSBHostDataType* ]] || usb=SPUSBHostDataType
+    /usr/bin/perl -e 'alarm 43; exec @ARGV or die $!' /usr/sbin/system_profiler -json -timeout 32 SPDisplaysDataType SPThunderboltDataType "$usb" | hardware_summary
+    local -a rc=("${PIPESTATUS[@]}")
+    if ((rc[0] || rc[1])); then echo "Inventar limitat (profil=${rc[0]}, decodor=${rc[1]})."; fi
+}
+
+case ${1:-} in
+    --target) target; exit $? ;;
+    --parse-finder) finder_stack; exit $? ;;
+    --parse-hardware) hardware_summary; exit $? ;;
+esac
+dest=${1:-${GOLDEN_GATE_SSH:-@@SSH_TARGET@@}}
+if [[ $# -gt 1 || ! $dest =~ ^[[:alnum:]_][[:alnum:]_.-]*@[[:alnum:]][[:alnum:].-]*$ ]]; then exit 2; fi
+dir=$(cd "$(dirname "$0")" && pwd -P) || exit 1
+report=$(/usr/bin/mktemp "$dir/GoldenGate-Finder-Elgato.XXXXXXXX") || exit 1
+echo "Raport pe iMac: $report"
+/usr/bin/ssh -T -F /dev/null -o StrictHostKeyChecking=yes -o UpdateHostKeys=no -o ClearAllForwardings=yes -o ForwardAgent=no -o ForwardX11=no -o ConnectTimeout=10 -o ServerAliveInterval=10 -o ServerAliveCountMax=3 "$dest" /bin/bash -s -- --target < "$0" | /usr/bin/tee "$report"
+status=("${PIPESTATUS[@]}"); ((status[1] == 0)) || exit 1; exit "${status[0]}"
