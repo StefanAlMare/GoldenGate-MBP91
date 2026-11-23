@@ -22,8 +22,8 @@
 
 1. [Cronologia (20–23 noiembrie)](CHRONOLOGY.ro.md) · [English](CHRONOLOGY.md)
 2. [Dovezile pentru CLT, HAO și Clang](TOOLCHAIN-EVIDENCE.md)
-3. [Xcode 27.2 — Intel / ARM64 / Universal 2](XCODE.md)
-4. [Registrul MacPorts actualizabil](MACPORTS.md) · [Tabel porturi](ports.csv)
+3. [Xcode 27.2 — Intel / ARM64 / Universal 2](XCODE.ro.md)
+4. [Registrul MacPorts actualizabil](MACPORTS.ro.md) · [Tabel porturi](ports.csv)
 5. [Corecția sursă HAO APFS](patches/hao-livepatch-compression.patch) și [colectorul read-only](collect-macports.sh)
 
 **Separăm dovezile:** PASS fizic sau raportat cu rezultat concret nu înseamnă compatibilitate generală. Porturile care încă se compilează nu sunt marcate finalizate. Compilarea ARM64 pe Intel nu dovedește execuția nativă pe Apple Silicon. [Galeria A/B](../GALLERY.md) păstrează fotografiile reale ale hardwareului.
