@@ -1,5 +1,7 @@
 # MacBookPro9,1 · First setup on 19 November 2026
 
+> **Later Stage C milestone (23 November):** the toolchain now compiles C/C++/LTO under CLT 27.2, Clang builds ARM64 and Universal 2, and Xcode 27.2 completed 10/10 ARM64/Universal 2 builds. [See the separate chronological Stage C record](build-c/README.md); this page preserves the original 19–20 November hardware observations.
+
 **English** · [Română](STADIUL-1.md)
 
 StefanAlMare booted Golden Gate 27.2.1 (26B131) from an external USB SSD on a MacBookPro9,1 and began setup in Setup Assistant. He confirmed this on the MacBook’s screen. The detailed captures in the local project log come from earlier boots that stalled during setup.
