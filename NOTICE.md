@@ -45,3 +45,7 @@ the OpenCorePkg and OCLP license texts in `LICENSES/`.
 Apple binaries, installers, disk images and generated caches are never part of this
 repository. You supply them as build inputs, and the build writes its outputs to
 your machine.
+
+## Golden Gate C local source patch (November 2026)
+
+The [experimental HAO APFS compression/hardlink diff](golden-gate/build-c/patches/hao-livepatch-compression.patch) modifies the original `tools/hao/src/livepatch.py` from [lythka/hao-patcher](https://github.com/lythka/hao-patcher). Original upstream ownership and its MIT license remain acknowledged. This is a version-pinned source diff, **not** a claim to relicense or own the underlying HAO backend. It is published without any copied Apple framework, binary or private system image. See the [C-stage provenance and testing limits](golden-gate/build-c/TOOLCHAIN-EVIDENCE.md).
