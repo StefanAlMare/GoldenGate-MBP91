@@ -1,5 +1,7 @@
 # Golden Gate pe MacBookPro9,1 — istoricul variantelor A și B
 
+> **Continuare:** [Build C — cronologia tehnică 20–23 noiembrie 2026](build-c/CHRONOLOGY.ro.md), inclusiv CLT, HAO, APFS, Xcode, Clang și MacPorts. Acest dosar păstrează numai etapele istorice A/B.
+
 Între 17 și 20 noiembrie 2026, Golden Gate 27.2.1 (26B131) a ajuns de la un profil pentru MacBookPro9,1 la prima configurare pe un SSD USB, desktop și autentificare după repornire. Pe varianta B au fost confirmate fizic reparații pentru Finder, Dock, tragerea ferestrelor și deschiderea panoului Baterie. Calculatorul testat a fost un MacBook Pro de 15″, Mid 2012, cu Intel HD Graphics 4000, NVIDIA GeForce GT 650M și comutatorul grafic GMUX.
 
 Autorul principal al HAO este **lythka**. Portarea locală și validarea pe hardware îi aparțin lui **StefanAlMare ([@StefanAlMare](https://github.com/StefanAlMare))**. Implementarea instrumentelor, a adaptărilor locale și a probelor a fost realizată cu **Codex (OpenAI)**. Componentele de pornire și driverele de compatibilitate au folosit și proiectul OpenCore Legacy Patcher.

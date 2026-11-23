@@ -1,0 +1,161 @@
+--- a/tools/hao/src/livepatch.py
++++ b/tools/hao/src/livepatch.py
+@@ -92,15 +92,76 @@
+     return m
+ 
+ 
++
++# Preserve UF_COMPRESSED explicitly: Darwin lchflags uses setattrlist rather
++# than the chflags syscall's protected-bit behavior. Never assign this bit to
++# a new plain-byte copy; it belongs only to the inode already storing decmpfs.
++UF_COMPRESSED = 0x20
++
++
++def _native_fchflags(fd, bits):
++    import ctypes
++    library = ctypes.CDLL('/usr/lib/libSystem.B.dylib', use_errno=True)
++    function = library.fchflags
++    function.argtypes = [ctypes.c_int, ctypes.c_uint32]
++    function.restype = ctypes.c_int
++    if function(fd, bits) != 0:
++        error = ctypes.get_errno()
++        raise OSError(error, os.strerror(error))
++
++
++def _hold_replaced_inode(target):
++    """Pin only a regular old inode; no path can redirect its later restoration."""
++    if not target.exists() or target.is_symlink():
++        return None, None
++    fd = os.open(target, os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW)
++    try:
++        before = os.fstat(fd)
++        current = os.lstat(target)
++        if not stat.S_ISREG(before.st_mode) or (before.st_dev, before.st_ino) != (current.st_dev, current.st_ino):
++            raise PatchError('%s changed before replacing its inode' % target)
++        return fd, getattr(before, 'st_flags', 0)
++    except BaseException:
++        os.close(fd)
++        raise
++
++
++def _replace_preserving_peers(source, target, attributes):
++    fd, before = _hold_replaced_inode(target)
++    try:
++        if target.exists():
++            attributes.clear_flags(target)
++        os.replace(source, target)
++    finally:
++        if fd is not None:
++            try:
++                attributes.restore_inode_flags(fd, before)
++            finally:
++                os.close(fd)
++
++
++def _unlink_preserving_peers(target, attributes):
++    fd, before = _hold_replaced_inode(target)
++    try:
++        if target.exists() or target.is_symlink():
++            attributes.clear_flags(target)
++        target.unlink(missing_ok=True)
++    finally:
++        if fd is not None:
++            try:
++                attributes.restore_inode_flags(fd, before)
++            finally:
++                os.close(fd)
+ class Attributes:
+     """Reads and sets install attributes under ROOT. PRIVILEGED (default: running as root) decides whether owners and
+     system flags are set; CHOWN and CHFLAGS can be replaced (tests record the calls instead of needing root)."""
+ 
+-    def __init__(self, root, privileged=None, chown=None, chflags=None):
++    def __init__(self, root, privileged=None, chown=None, chflags=None, fchflags=None):
+         self.root = Path(root)
+         self.privileged = (os.geteuid() == 0) if privileged is None else privileged
+         self.chown = chown or (lambda p, u, g: os.chown(p, u, g, follow_symlinks=False))
+         self.chflags = chflags or (lambda p, bits: os.chflags(p, bits, follow_symlinks=False))
++        self.fchflags = fchflags or _native_fchflags
+         self._ids = {}
+ 
+     def _table(self, name):
+@@ -172,16 +233,18 @@
+                [k for k in keys if not self.settable(k, want[k], have[k])]
+ 
+     def clear_flags(self, path):
+-        """Remove the flags that would stop PATH being replaced (as the hooks' chflags noschg,nouchg,norestricted)."""
+-        have = self.current(path)['flags']
++        """Clear install flags while preserving the inode's compression storage bit."""
++        raw = getattr(os.lstat(path), 'st_flags', 0)
++        have = raw & ~UF_COMPRESSED
+         if have and (self.privileged or not have & SYSTEM_FLAGS):
+-            self.chflags(path, 0)
++            self.chflags(path, raw & UF_COMPRESSED)
+ 
+     def apply(self, path, want):
+-        """Set WANT on PATH as far as this run can; returns the keys it could not set."""
++        """Set install attributes without changing this inode's compression storage."""
++        storage = getattr(os.lstat(path), 'st_flags', 0) & UF_COMPRESSED
+         have = self.current(path)
+         if have['flags'] and (self.privileged or not have['flags'] & SYSTEM_FLAGS):
+-            self.chflags(path, 0)                     # an immutable file's mode and owner cannot change
++            self.chflags(path, storage)
+         os.chmod(path, want['mode'])
+         skipped = []
+         if self.privileged:
+@@ -191,10 +254,23 @@
+         if want['flags'] & SYSTEM_FLAGS and not self.privileged:
+             skipped.append('flags')
+             if want['flags'] & ~SYSTEM_FLAGS:
+-                self.chflags(path, want['flags'] & ~SYSTEM_FLAGS)
++                self.chflags(path, (want['flags'] & ~SYSTEM_FLAGS) | storage)
+         elif want['flags']:
+-            self.chflags(path, want['flags'])
++            self.chflags(path, want['flags'] | storage)
+         return skipped
++
++    def restore_inode_flags(self, fd, before):
++        """Restore a replaced inode's remaining hardlinks via its held descriptor."""
++        current = os.fstat(fd)
++        if current.st_nlink == 0:
++            return
++        have = getattr(current, 'st_flags', 0)
++        if have != before:
++            if not self.privileged and ((have ^ before) & SYSTEM_FLAGS):
++                raise PatchError('cannot restore remaining hardlink flags without root')
++            self.fchflags(fd, before)
++            if getattr(os.fstat(fd), 'st_flags', 0) != before:
++                raise PatchError('remaining hardlink flags were not restored')
+ 
+ 
+ # Paths no live patch writes, whatever pack they are in: what reads them is made on the installer (the kernel
+@@ -446,10 +522,8 @@
+ def _install(source, target, want, attributes, name=None, created=None):
+     tmp = _copy_new(source, target, '.hao-patch-', name)
+     if created:
+-        created()                       # recorded only once this run made it: a rollback never removes another's file
+-    if target.exists():
+-        attributes.clear_flags(target)
+-    os.replace(tmp, target)
++        created()
++    _replace_preserving_peers(tmp, target, attributes)
+     return attributes.apply(target, want)
+ 
+ 
+@@ -653,15 +727,11 @@
+             if cut.is_file() and not cut.is_symlink():
+                 cut.unlink()
+         if f['old_sha256'] is None:
+-            if target.exists() or target.is_symlink():
+-                attributes.clear_flags(target)
+-            target.unlink(missing_ok=True)
++            _unlink_preserving_peers(target, attributes)
+         elif not f.get('attrs_only'):
+             backup = folder / 'backup' / f['path']
+             tmp = _copy_new(backup, target, '.hao-revert-')
+-            if target.exists():
+-                attributes.clear_flags(target)
+-            os.replace(tmp, target)
++            _replace_preserving_peers(tmp, target, attributes)
+             if sha256_file(target) != f['old_sha256']:
+                 raise PatchError('%s: restored file does not match its recorded sha256' % f['path'])
+         if f['old_sha256'] is not None and f.get('before'):

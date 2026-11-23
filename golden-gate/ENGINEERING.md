@@ -4,6 +4,9 @@
 
 This document separates **verified hardware measurements**, **operator observations**, **build provenance**, and **unresolved issues**. The subject is the 15-inch MacBookPro9,1 adaptation of [lythka's HAO](https://github.com/lythka/hao-patcher), not the upstream single-GPU MacBookPro9,2.
 
+> [!IMPORTANT]
+> **Stage C technical supplement (21–23 November 2026):** [Chronology](build-c/CHRONOLOGY.md), [CLT/Clang evidence](build-c/TOOLCHAIN-EVIDENCE.md), [Xcode Intel/ARM64/Universal 2](build-c/XCODE.md), and the [live MacPorts ledger](build-c/MACPORTS.md). The measurements below describe the earlier hardware A/B milestone and remain in chronological context.
+
 ## The engineering question
 
 The 13-inch MacBookPro9,2 has Ivy Bridge and Intel HD 4000. The 15-inch MacBookPro9,1 adds NVIDIA GT 650M and GMUX. Can Golden Gate 27 run with the two GPUs and the original display-switching architecture?
