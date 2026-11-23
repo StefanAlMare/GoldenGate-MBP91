@@ -1,6 +1,6 @@
 # Xcode 27.2 on a real 2012 Intel MacBook — build proofs
 
-[**Overview**](README.md) · [Chronology](CHRONOLOGY.md) · [Clang evidence](TOOLCHAIN-EVIDENCE.md)
+[**English**](XCODE.md) · [**Română**](XCODE.ro.md) · [**Overview**](README.md) · [Chronology](CHRONOLOGY.md) · [Clang evidence](TOOLCHAIN-EVIDENCE.md)
 
 **Hardware/software:** MacBookPro9,1; Golden Gate 27.2.1 (26B131); **Xcode 27.2 (27B52)**; Apple Clang 21.0.0 / macOS 27.2 SDK; HAO bridging Apple ARM-only components onto Intel. The build service is **Swift Build 6.4.2 compiled for x86_64** (source commit `2d847030c63961cb1cf8cbb6ad2bc7245fdfeb09`). The Apple linker is CLT 27.2 adapted for Golden Gate.
 
