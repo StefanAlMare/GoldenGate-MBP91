@@ -1,0 +1,136 @@
+{
+  "schema": "goldengate-stage-c-evidence-v1",
+  "recorded": "2026-11-23",
+  "hardware": {
+    "model": "MacBookPro9,1",
+    "os": "macOS 27.2.1",
+    "build": "26B131",
+    "architecture": "x86_64",
+    "original_software": "lythka/hao-patcher and hao-runtime",
+    "test_operator": "StefanAlMare"
+  },
+  "evidence_convention": {
+    "pass-physical": "saved real-device test result summarized in source report",
+    "pass-operator": "terminal success text from operator; underlying JSONL not bundled",
+    "in-progress": "operation underway, no full certification",
+    "pending": "test or complete inventory not yet supplied"
+  },
+  "boot": {
+    "status": "pass-physical",
+    "clt_snapshot_uuid": "672C29E6-307D-4E15-B328-714D6C35B005",
+    "later_ld_snapshot_uuid": "54804A00-E81C-4290-A2B8-33C601D45823",
+    "later_ld_snapshot_boot_independently_confirmed": false
+  },
+  "clt": {
+    "version": "27.2",
+    "apple_clang_version": "21.0.0",
+    "apple_clang_build": "clang-2100.4.1.1",
+    "default_target": "x86_64-apple-darwin",
+    "tests": [
+      {
+        "test": "C x86_64 build/link/run",
+        "status": "pass-physical",
+        "output": "GG_POSTBOOT_NATIVE_OK"
+      },
+      {
+        "test": "C++ x86_64 build/link/run",
+        "status": "pass-physical",
+        "output": "GG_CPP_NATIVE_OK"
+      },
+      {
+        "test": "C x86_64 LTO build/link/run",
+        "status": "pass-physical",
+        "output": "GG_POSTBOOT_NATIVE_OK"
+      },
+      {
+        "test": "make build/run",
+        "status": "pass-physical",
+        "output": "GG_POSTBOOT_NATIVE_OK"
+      },
+      {
+        "test": "clang direct ARM64",
+        "status": "pass-operator",
+        "output": "ARM64-direct PASS"
+      },
+      {
+        "test": "clang direct Universal 2",
+        "status": "pass-operator",
+        "output": "Universal2-direct PASS"
+      }
+    ],
+    "direct_report_basename": "GoldenGate-C-Clang.HcenV1/Raport.jsonl",
+    "compiler_report_basename": "GoldenGate-C-LD-verify-20261122-041834-f7bb5acb.txt"
+  },
+  "xcode": {
+    "version": "27.2",
+    "build": "27B52",
+    "client": "xcodebuild through HAO",
+    "swift_build": "6.4.2 x86_64",
+    "sdk": "MacOSX27.2.sdk",
+    "five_intel_builds": "pass-physical",
+    "arm64_universal_test_count": 10,
+    "arm64_universal_pass_count": 10,
+    "arm64_universal_status": "pass-physical",
+    "slices_checked_by": [
+      "Mach-O headers",
+      "lipo -archs"
+    ],
+    "targets": [
+      {
+        "name": "C",
+        "intel": "pass-physical",
+        "arm64": "pass-physical",
+        "universal2": "pass-physical",
+        "universal_intel_run": "c 400065"
+      },
+      {
+        "name": "C++17 libc++",
+        "intel": "pass-physical",
+        "arm64": "pass-physical",
+        "universal2": "pass-physical",
+        "universal_intel_run": "cpp 2104"
+      },
+      {
+        "name": "Objective-C Foundation",
+        "intel": "pass-physical",
+        "arm64": "pass-physical",
+        "universal2": "pass-physical",
+        "universal_intel_run": "objc 1565"
+      },
+      {
+        "name": "Swift Foundation",
+        "intel": "pass-physical",
+        "arm64": "pass-physical",
+        "universal2": "pass-physical",
+        "universal_intel_run": "swift 3103"
+      },
+      {
+        "name": "AppKit application",
+        "intel": "pass-physical",
+        "arm64": "pass-physical",
+        "universal2": "pass-physical",
+        "gui_launch": "pending"
+      }
+    ],
+    "first_c_project": {
+      "status": "pass-physical",
+      "output": "model=MacBookPro9,1 arch=x86_64 n=3589 sum=6442255",
+      "sha256": "006f17dc90ab2cd0e4f81da182bac35fa9986db55f4a6373009565abaa90ebdb"
+    },
+    "evidence_directory": "GoldenGate-Xcode-Arhitecturi-b2n9s5h0",
+    "native_apple_silicon_run": "pending",
+    "interactive_gui_build": "pending"
+  },
+  "macports": {
+    "base": "2.12.7",
+    "native_build_pipeline": "in-progress",
+    "several_installations": "operator-reported",
+    "complete_tested_port_list": "pending",
+    "inventory_file": "ports.csv"
+  },
+  "provenance": {
+    "clt_staging_manifest_sha256": "bcfe4f590d36fee1f206206c1a8d1036ee5af39356c3dab5fbe0fb5342ca4581",
+    "hao_runtime_candidate_sha256": "59e5fdf95a166a5b30dbc6250eb3842400c3d24818d858fe69a16878c9021fcc",
+    "hao_backend_patch_sha256": "0e7c507e1b1b77ce45523f96f06b93da25a6e56a27342a0b9172055f383f2581"
+  }
+}
