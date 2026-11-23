@@ -22,8 +22,8 @@
 
 1. [Chronology (20–23 November)](CHRONOLOGY.md) · [Cronologie în română](CHRONOLOGY.ro.md)
 2. [CLT, HAO and direct Clang evidence](TOOLCHAIN-EVIDENCE.md)
-3. [Xcode 27.2 Intel / ARM64 / Universal 2 verification](XCODE.md)
-4. [MacPorts progress and updateable package checklist](MACPORTS.md) · [Machine-readable port ledger](ports.csv)
+3. [Xcode 27.2 Intel / ARM64 / Universal 2 verification](XCODE.md) · [Română](XCODE.ro.md)
+4. [MacPorts progress and updateable package checklist](MACPORTS.md) · [Română](MACPORTS.ro.md) · [Machine-readable port ledger](ports.csv)
 5. [Source-only HAO APFS correction](patches/hao-livepatch-compression.patch) and [read-only future inventory helper](collect-macports.sh)
 
 **Evidence policy:** PASS indicates preserved physical or operator test output. An ongoing MacPorts compile is not called a completed installation. Xcode building ARM64 code on Intel does **not** establish native execution on Apple Silicon. See the [existing Stage 1 gallery](../GALLERY.md) for authentic hardware screenshots.
