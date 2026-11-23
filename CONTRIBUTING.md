@@ -52,3 +52,9 @@ A fix is a recipe in `patches/` plus the source that builds its inputs.
 
 Say what changed and why, and end with a `Tested:` line that says what you
 actually ran.
+
+## Golden Gate C: adding verified MacPorts and Xcode evidence
+
+The [C-stage evidence convention](golden-gate/build-c/README.md) distinguishes physical PASS, operator-reported PASS, in-progress and pending. To update the package inventory, first collect the actual **Golden Gate C** (not Tahoe) `port installed` and requested list using [the read-only script](golden-gate/build-c/collect-macports.sh), redact its output, then add version, revision, variants, architecture, build/activation status and a real smoke-test result to [ports.csv](golden-gate/build-c/ports.csv). Update [MACPORTS.md](golden-gate/build-c/MACPORTS.md) only when the evidence changes. Do not mark every dependency as tested merely because it is installed.
+
+For Clang or Xcode use exact OS/build, model, source tool version and requested architectures; preserve `xcodebuild`/linker exit, Mach-O slices (`lipo -archs`) and actual runtime output. Separate compiling ARM64 on Intel from running natively on Apple Silicon, and separate the Xcode GUI launching from an interactive project build. Avoid publishing raw home-directory logs, serial numbers, proprietary Apple binaries or cached build images.
