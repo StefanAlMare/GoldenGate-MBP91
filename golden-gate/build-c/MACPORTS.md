@@ -1,6 +1,6 @@
 # MacPorts on Golden Gate Intel — continuously updated ledger
 
-[**English**](MACPORTS.md) · [**Română**](README.ro.md) · [Build C](README.md) · [Machine-readable port ledger](ports.csv)
+[**English**](MACPORTS.md) · [**Română**](MACPORTS.ro.md) · [Build C](README.md) · [Machine-readable port ledger](ports.csv)
 
 ![MacPorts](https://img.shields.io/badge/MacPorts-2.12.7-315d85?style=flat-square)
 ![State](https://img.shields.io/badge/Build_status-In_progress-b77d31?style=flat-square)
