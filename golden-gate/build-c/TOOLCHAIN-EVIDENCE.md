@@ -1,6 +1,6 @@
 # CLT 27.2 / HAO / Apple Clang — physical test evidence
 
-[**Build C**](README.md) · [Chronology](CHRONOLOGY.md) · [Xcode matrix](XCODE.md) · [MacPorts](MACPORTS.md)
+[**English**](TOOLCHAIN-EVIDENCE.md) · [**Română**](TOOLCHAIN-EVIDENCE.ro.md) · [Build C](README.md) · [Chronology](CHRONOLOGY.md) · [Xcode matrix](XCODE.md) · [MacPorts](MACPORTS.md)
 
 **Test target:** 15-inch MacBookPro9,1 (Mid 2012), Intel Ivy Bridge, dual GPU, Golden Gate C **27.2.1 / 26B131**. All hashes are SHA-256 unless noted. This file quotes **selected proof lines**, not complete logs or Apple binaries.
 

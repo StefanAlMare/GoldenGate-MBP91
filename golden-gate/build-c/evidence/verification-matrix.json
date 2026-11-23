@@ -126,7 +126,16 @@
     "native_build_pipeline": "in-progress",
     "several_installations": "operator-reported",
     "complete_tested_port_list": "pending",
-    "inventory_file": "ports.csv"
+    "inventory_file": "ports.csv",
+    "interim_operator_report": {
+      "recorded": "2026-11-23",
+      "active_ports_reported": 138,
+      "scope": "Golden Gate C checkpoint reported by operator; not an audited inventory",
+      "coreutils": "in progress at operator checkpoint",
+      "wget": "configure blocked: source URL returned HTTP 404",
+      "audited_source_build_count": "pending",
+      "audited_runtime_test_count": "pending"
+    }
   },
   "provenance": {
     "clt_staging_manifest_sha256": "bcfe4f590d36fee1f206206c1a8d1036ee5af39356c3dab5fbe0fb5342ca4581",

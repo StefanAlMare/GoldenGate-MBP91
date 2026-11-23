@@ -15,13 +15,13 @@
 |:--|:--|:--|
 | **CLT 27.2 / Apple Clang 21** | C, C++, LTO autentic, make și executabile x86_64 PASS; compilare directă ARM64 și Universal 2 PASS | Execuția nativă pe Apple Silicon nu a fost testată |
 | **Xcode 27.2 (27B52)** | 5 proiecte Intel plus **10/10** builduri ARM64 și Universal 2; C, C++17, Objective-C, Swift și AppKit | `xcodebuild` verificat, `⌘B` din interfață încă netestat |
-| **MacPorts 2.12.7** | Compilare/instalare din surse prin HAO/CLT; mai multe pachete instalate conform operatorului | Compilarea continuă; lista exactă de porturi urmează |
+| **MacPorts 2.12.7** | Compilare/instalare din surse prin HAO/CLT; 138 de porturi active raportate intermediar; compilările continuă | Nu reprezintă 138 de builduri din surse ori teste individuale; inventarul verificat urmează |
 | **HAO / APFS** | Backend corectat, 77 legături recuperate, **84/84 System** și **3/3 CFG Data**, boot din snapshot nou | Copie C experimentală, System/Data se restaurează separat |
 
 ### Documentație în ordinea execuției
 
 1. [Cronologia (20–23 noiembrie)](CHRONOLOGY.ro.md) · [English](CHRONOLOGY.md)
-2. [Dovezile pentru CLT, HAO și Clang](TOOLCHAIN-EVIDENCE.md)
+2. [Dovezile CLT, HAO și Clang (RO)](TOOLCHAIN-EVIDENCE.ro.md) · [Detalii EN](TOOLCHAIN-EVIDENCE.md)
 3. [Xcode 27.2 — Intel / ARM64 / Universal 2](XCODE.ro.md)
 4. [Registrul MacPorts actualizabil](MACPORTS.ro.md) · [Tabel porturi](ports.csv)
 5. [Corecția sursă HAO APFS](patches/hao-livepatch-compression.patch) și [colectorul read-only](collect-macports.sh)

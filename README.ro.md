@@ -31,10 +31,10 @@
 | **CLT Intel** | C, C++, `-flto`, `make` și Python 3.14.10 x86_64 **PASS** |
 | **Clang arhitecturi suplimentare** | **ARM64-direct PASS** · **Universal2-direct PASS** |
 | **Xcode** | **5 proiecte Intel + 10/10 ARM64/Universal 2** cu `xcodebuild` și Swift Build 6.4.2 nativ Intel |
-| **MacPorts 2.12.7** | Am făcut posibilă compilarea pachetelor din surse cu CLT adaptat. **Mai multe porturi s-au instalat, iar compilarea continuă.** Inventarul exact urmează. |
+| **MacPorts 2.12.7** | Am făcut posibilă compilarea pachetelor din surse cu CLT adaptat. **Raport intermediar al operatorului: 138 de porturi active; compilările continuă.** Nu înseamnă 138 de builduri din surse sau teste de execuție validate individual. |
 | **HAO / APFS** | Repararea hardlinkurilor comprimate, **84 fișiere System + 3 configurații Data**, boot confirmat din snapshotul CLT nou |
 
-**Documentația și dovezile, în ordinea execuției:** [**Prezentarea build-ului C (RO)**](golden-gate/build-c/README.ro.md) · [English](golden-gate/build-c/README.md) · [Cronologie](golden-gate/build-c/CHRONOLOGY.ro.md) · [Probe Clang](golden-gate/build-c/TOOLCHAIN-EVIDENCE.md) · [Xcode — 15 proiecte](golden-gate/build-c/XCODE.ro.md) · [Registrul MacPorts](golden-gate/build-c/MACPORTS.ro.md).
+**Documentația și dovezile, în ordinea execuției:** [**Prezentarea build-ului C (RO)**](golden-gate/build-c/README.ro.md) · [English](golden-gate/build-c/README.md) · [Cronologie](golden-gate/build-c/CHRONOLOGY.ro.md) · [Probe Clang (RO)](golden-gate/build-c/TOOLCHAIN-EVIDENCE.ro.md) · [EN](golden-gate/build-c/TOOLCHAIN-EVIDENCE.md) · [Xcode — 15 proiecte](golden-gate/build-c/XCODE.ro.md) · [Registrul MacPorts](golden-gate/build-c/MACPORTS.ro.md).
 
 *Fotografiile și descrierile A/B de mai jos sunt dovezi istorice din etapa 1. Buildurile Xcode prin CLI sunt confirmate; `⌘B` interactiv, execuția nativă Apple Silicon, lista finală de porturi și installerul general necesită teste distincte.*
 <!-- GOLDEN-GATE-C-20261123-END -->

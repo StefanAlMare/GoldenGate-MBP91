@@ -15,13 +15,13 @@
 |:--|:--|:--|
 | **CLT 27.2 / Apple Clang 21** | x86_64 C, C++, true LTO, make and executable run PASS; direct ARM64 and Universal 2 compilation PASS | ARM64 native execution on Apple Silicon not tested |
 | **Xcode 27.2 (27B52)** | 5 Intel project builds plus **10/10** ARM64 and Universal 2 builds; C, C++17, Objective-C, Swift and AppKit | CLI `xcodebuild` proven, GUI interactive `⌘B` remains to test |
-| **MacPorts 2.12.7** | Source build/installation working through adapted HAO/CLT; several packages installed according to the operator | Further builds underway; exact installed-port audit pending |
+| **MacPorts 2.12.7** | Source build/installation working through adapted HAO/CLT; 138 active ports in an interim operator report; source builds underway | Count is not 138 individually verified source builds or runtime tests; audit pending |
 | **HAO / APFS** | Fixed compressed-hardlink backend, recovered 77 names, installed **84/84 System** and **3/3 Clang CFG** files; confirmed boot from new snapshot | Experimental C clone; System and Data have separate rollback needs |
 
 ### Documents — in execution order
 
 1. [Chronology (20–23 November)](CHRONOLOGY.md) · [Cronologie în română](CHRONOLOGY.ro.md)
-2. [CLT, HAO and direct Clang evidence](TOOLCHAIN-EVIDENCE.md)
+2. [CLT, HAO and direct Clang evidence](TOOLCHAIN-EVIDENCE.md) · [Română](TOOLCHAIN-EVIDENCE.ro.md)
 3. [Xcode 27.2 Intel / ARM64 / Universal 2 verification](XCODE.md) · [Română](XCODE.ro.md)
 4. [MacPorts progress and updateable package checklist](MACPORTS.md) · [Română](MACPORTS.ro.md) · [Machine-readable port ledger](ports.csv)
 5. [Source-only HAO APFS correction](patches/hao-livepatch-compression.patch) and [read-only future inventory helper](collect-macports.sh)

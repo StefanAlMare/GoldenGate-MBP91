@@ -27,6 +27,7 @@
 | **23 Nov** | C-19 | Separate Apple Clang direct cross-architecture build test, without Xcode project | **ARM64-direct PASS; Universal2-direct PASS**, operator output; detailed `Raport.jsonl` kept locally on iMac |
 | **22–23 Nov** | C-20 | Install MacPorts 2.12.7 and build sources for Darwin 27 x86_64 through adapted CLT/HAO | Several ports have installed according to operator; other source builds still active; final inventory pending |
 | **23 Nov** | C-21 | Evaluate newer upstream installer/EFI and Metal r12 changes in private builder sources; investigate WeatherKit/VFX and EFI separately | Selected source tests PASS; **not** promoted to a new booted C image, not Weather/EFI fixes |
+| **23 Nov (interim)** | C-22 | Record MacPorts progress without interrupting a running batch | Operator-reported **138 active ports**; `coreutils` still being processed and `wget` configure blocked by a source URL returning 404. **Not** a per-port source-build/runtime audit |
 
 ## Important interpretation
 

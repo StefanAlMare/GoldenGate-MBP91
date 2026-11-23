@@ -27,7 +27,8 @@ Perioada **20–23 noiembrie 2026**, după ultima publicare A/B. Mașina: MacBoo
 | **23 nov.** | C-19 | Clang direct, independent de proiectele Xcode | **ARM64-direct PASS, Universal2-direct PASS**; jurnal pe iMac |
 | **22–23 nov.** | C-20 | Instalare MacPorts 2.12.7 și compilarea din surse prin HAO/CLT | Mai multe porturi instalate conform operatorului, altele încă în construcție; lista finală urmează |
 | **23 nov.** | C-21 | Actualizări upstream evaluate privat pentru constructor, EFI și Metal r12; diagnostic WeatherKit/VFX | Teste de sursă, fără promovare în build C nou, fără a pretinde că Weather/EFI sunt rezolvate |
+| **23 nov. (intermediar)** | C-22 | Consemnarea progresului MacPorts, fără întreruperea lotului în lucru | Operatorul a raportat **138 de porturi active**; `coreutils` era încă în procesare, iar configurarea `wget` a întâlnit un URL sursă cu eroare 404. **Nu** este inventarul buildurilor/testelor verificate individual |
 
 **Precizări:** compilarea ARM64 nu dovedește rularea nativă pe Apple Silicon. Pentru Xcode, buildurile CLI sunt demonstrate, dar `⌘B` interactiv și interfața AppKit cer probe distincte. Snapshotul LD este consemnat ca selectat; o probă separată de reboot din el nu trebuie inventată. Modificările Data nu se retrag doar prin revenirea la snapshotul System anterior.
 
-**Atribuire:** HAO original [lythka](https://github.com/lythka/hao-patcher), HAO runtime, OpenCore/OCLP; adaptare 9,1 și teste fizice [StefanAlMare](https://github.com/StefanAlMare) cu asistență Codex. [Dovezi CLT](TOOLCHAIN-EVIDENCE.md) · [Dovezi Xcode](XCODE.md).
+**Atribuire:** HAO original [lythka](https://github.com/lythka/hao-patcher), HAO runtime, OpenCore/OCLP; adaptare 9,1 și teste fizice [StefanAlMare](https://github.com/StefanAlMare) cu asistență Codex. [Dovezi CLT (RO)](TOOLCHAIN-EVIDENCE.ro.md) · [Detalii EN](TOOLCHAIN-EVIDENCE.md) · [Dovezi Xcode](XCODE.ro.md).

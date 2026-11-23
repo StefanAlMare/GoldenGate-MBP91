@@ -31,7 +31,7 @@
 | **Native Intel CLT** | C, C++, `-flto`, `make` and Python 3.14.10 x86_64 **PASS** |
 | **Clang cross-architectures** | **ARM64-direct PASS** · **Universal2-direct PASS** |
 | **Xcode compilation** | **5 Intel projects + 10/10 ARM64/Universal 2**, using `xcodebuild` and a native Intel Swift Build 6.4.2 service |
-| **MacPorts 2.12.7** | We enabled source builds with our adapted Apple toolchain. **Several ports have installed; compilation continues.** The exact verified inventory will follow. |
+| **MacPorts 2.12.7** | We enabled source builds with our adapted Apple toolchain. **Interim operator report: 138 active ports; compilation continues.** This is not 138 individually audited source builds or runtime tests. |
 | **HAO / APFS integration** | Corrected compressed hardlink handling; **84 System + 3 Data CFG** components installed; new CLT snapshot boot confirmed |
 
 **Read the full evidence, source patch and temporal sequence:** [**Build C technical index (EN)**](golden-gate/build-c/README.md) · [Română](golden-gate/build-c/README.ro.md) · [Chronological record](golden-gate/build-c/CHRONOLOGY.md) · [Clang evidence](golden-gate/build-c/TOOLCHAIN-EVIDENCE.md) · [Xcode 15-project matrix](golden-gate/build-c/XCODE.md) · [MacPorts live ledger](golden-gate/build-c/MACPORTS.md).

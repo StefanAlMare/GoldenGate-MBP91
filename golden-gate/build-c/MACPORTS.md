@@ -22,6 +22,8 @@
 
 **No port names have been pre-marked complete.** A prior report enumerated 117 installed ports on the separate **Tahoe** volume. Those are **not** an inventory of Golden Gate C.
 
+> **Interim operator report (23 November):** **138 active ports** on Golden Gate C were reported at one checkpoint, while `coreutils` was still being processed. An attempt to configure `wget` encountered a source URL returning **HTTP 404**. The count is not an audited per-port export and does **not** establish 138 successful source builds or runtime tests. Keep `ports.csv` empty until individual receipts are available.
+
 ### Evidence for missing binary archives
 
 The MacPorts CLI attempted Darwin 27 Intel archive endpoints and received unavailable-archive responses, then moved to locally building source dependencies. A 23 November physical observation found a running `clang` process within the MacPorts process tree (77.4% sampled CPU at 16:23). The current compiling port is not reliably identified by that snapshot alone.

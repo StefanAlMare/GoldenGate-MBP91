@@ -8,6 +8,8 @@
 
 **Stare la 23 noiembrie:** MacPorts 2.12.7 funcționează, mai multe pachete au fost instalate conform operatorului, iar compilarea altora continuă. Un proces Clang activ a fost observat în arborele MacPorts. **Lista completă de porturi și versiuni nu este încă verificată**; nu inventăm nume și nu copiem cele 117 porturi de pe instalarea separată Tahoe.
 
+> **Raport intermediar al operatorului (23 noiembrie):** **138 de porturi active** în Golden Gate C la un punct de control. `coreutils` era încă în lucru; configurarea `wget` a întâmpinat un URL sursă care răspundea cu **HTTP 404**. Numărul nu provine dintr-un export complet verificat și **nu reprezintă 138 de compilări din surse sau teste de execuție**. `ports.csv` rămâne necompletat până la dovezile individuale.
+
 ## Procedura de completare
 
 - [x] MacPorts 2.12.7 pornește: `port version` → `Version: 2.12.7`.
