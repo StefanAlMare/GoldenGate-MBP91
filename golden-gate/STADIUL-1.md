@@ -1,5 +1,7 @@
 # MacBookPro9,1 · Prima configurare din 19 noiembrie 2026
 
+> **Actualizare separată din etapa C (23 noiembrie):** CLT 27.2, compilări Clang Intel/ARM64/Universal 2 și Xcode 27.2 cu 10/10 builduri ARM64/Universal 2. [Cronologia C](build-c/README.ro.md). Aici păstrăm nemodificate observațiile hardware A/B din 19–20 noiembrie.
+
 [English](STAGE-1.md) · **Română**
 
 StefanAlMare a pornit Golden Gate 27.2.1 (26B131) de pe un SSD USB extern pe MacBookPro9,1 și a început configurarea în Setup Assistant. A confirmat vizual apariția interfeței Setup Assistant. Capturile detaliate disponibile în registrul local provin din pornirile anterioare, când configurarea se bloca.
