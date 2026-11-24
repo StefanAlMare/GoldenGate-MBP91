@@ -20,18 +20,18 @@
 > **A working desktop, not yet a finished distribution.** On **19 November 2026**, Golden Gate 27.2.1 (26B131) reached Setup Assistant, account creation and the desktop on a real **15-inch Mid 2012 MacBook Pro**, booting from an external USB SSD. Restart and sign-in were subsequently confirmed. On **20 November**, a second image received focused repairs verified on the laptop. **Stage 1 is complete; the project remains experimental.**
 
 <!-- GOLDEN-GATE-C-20261123-START -->
-## Stage C — Clang, Xcode 27.2 and MacPorts on Intel (23 November 2026)
+## Stage C — Clang, Xcode 27.2 and MacPorts on Intel (23–24 November 2026)
 
 > **New milestone on the real 2012 MacBookPro9,1:** Apple CLT **27.2 / Clang 21** now compiles and runs **native x86_64 C, C++, LTO and make** programs through HAO. **Direct Clang builds for ARM64 and Universal 2 also PASS.** Xcode **27.2 (27B52)** has produced **5 successful x86_64 projects** and **10/10 ARM64/Universal 2 builds** (C, C++17, Objective-C, Swift, AppKit), with Universal 2 architectures verified in Mach-O and with `lipo`.
 
-![Clang](https://img.shields.io/badge/Clang_21-x86__64_ARM64_Universal_2-247a5a?style=flat-square) ![Xcode](https://img.shields.io/badge/Xcode_27.2-10%2F10_ARM%2BUniversal-247a5a?style=flat-square) ![MacPorts](https://img.shields.io/badge/MacPorts_2.12.7-source_builds_in_progress-b77d31?style=flat-square)
+![Clang](https://img.shields.io/badge/Clang_21-x86__64_ARM64_Universal_2-247a5a?style=flat-square) ![Xcode](https://img.shields.io/badge/Xcode_27.2-10%2F10_ARM%2BUniversal-247a5a?style=flat-square) ![MacPorts](https://img.shields.io/badge/MacPorts_2.12.7-15_BASIC_173_active-247a5a?style=flat-square)
 
 | Stage C result | Confirmed state |
 |:--|:--|
 | **Native Intel CLT** | C, C++, `-flto`, `make` and Python 3.14.10 x86_64 **PASS** |
 | **Clang cross-architectures** | **ARM64-direct PASS** · **Universal2-direct PASS** |
 | **Xcode compilation** | **5 Intel projects + 10/10 ARM64/Universal 2**, using `xcodebuild` and a native Intel Swift Build 6.4.2 service |
-| **MacPorts 2.12.7** | We enabled source builds with our adapted Apple toolchain. **Interim operator report: 138 active ports; compilation continues.** This is not 138 individually audited source builds or runtime tests. |
+| **MacPorts 2.12.7** | We enabled source builds with our adapted Apple toolchain. **15/15 selected BASIC ports installed and active; 173 active ports overall (including supporting packages/dependencies) in the 24 November registry inventory.** Installation status is verified from the supplied report; per-port source-build origin and runtime testing are not. |
 | **HAO / APFS integration** | Corrected compressed hardlink handling; **84 System + 3 Data CFG** components installed; new CLT snapshot boot confirmed |
 
 **Read the full evidence, source patch and temporal sequence:** [**Build C technical index (EN)**](golden-gate/build-c/README.md) · [Română](golden-gate/build-c/README.ro.md) · [Chronological record](golden-gate/build-c/CHRONOLOGY.md) · [Clang evidence](golden-gate/build-c/TOOLCHAIN-EVIDENCE.md) · [Xcode 15-project matrix](golden-gate/build-c/XCODE.md) · [MacPorts live ledger](golden-gate/build-c/MACPORTS.md).

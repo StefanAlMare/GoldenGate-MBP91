@@ -1,62 +1,48 @@
-# MacPorts on Golden Gate Intel — continuously updated ledger
+# MacPorts 2.12.7 on Golden Gate Intel — 24 November 2026
 
-[**English**](MACPORTS.md) · [**Română**](MACPORTS.ro.md) · [Build C](README.md) · [Machine-readable port ledger](ports.csv)
+[**English**](MACPORTS.md) · [**Română**](MACPORTS.ro.md) · [Build C](README.md) · [Complete CSV inventory](ports.csv)
 
-![MacPorts](https://img.shields.io/badge/MacPorts-2.12.7-315d85?style=flat-square)
-![State](https://img.shields.io/badge/Build_status-In_progress-b77d31?style=flat-square)
-![Inventory](https://img.shields.io/badge/Verified_port_inventory-Pending-505866?style=flat-square)
+> **15/15 selected BASIC ports installed and active; 173 unique MacPorts ports active in total.** Report captured on **24 November 2026, 09:57:40 EET**, on a **MacBookPro9,1**, Golden Gate **27.2.1 (26B131)**, x86_64, MacPorts **2.12.7**. This confirms installed/active inventory, **not** the source-build provenance or individual runtime behavior of all 173 ports.
 
-> **Why this matters:** MacPorts package archives for **Darwin 27 x86_64** are often unavailable, even when archives exist for Darwin 27 ARM64 or older Intel macOS versions. Our HAO-adapted **Apple CLT 27.2 / Clang 21 / linker and LTO** permits MacPorts 2.12.7 to compile and install packages from source on the actual Intel MacBookPro9,1. This was not possible with the initial unadapted CLT environment.
+| Metric | Verified from the operator-supplied inventory |
+|:--|--:|
+| Selected BASIC ports installed and active | **15/15** |
+| Total distinct active ports | **173** |
+| Additional active ports beyond BASIC selection | **158** |
+| ICU (separately checked, within the 173 total) | **`icu @78.3_1`** |
 
-## Status at 23 November 2026
+## Selected BASIC set — all 15 active
 
-| Verification gate | State | Grounded evidence |
+| Port | Exact version / variants | Registry state |
 |:--|:--|:--|
-| MacPorts base running on Golden Gate C | **PASS** | `port version` → `Version: 2.12.7` |
-| Apple compiler/linker executable under normal commands | **PASS** | C, C++, LTO, make and Python physical test matrix |
-| Source archive fallback and build pipeline | **WORKING** | MacPorts prints `Archive not available ... building locally` and invokes compiler |
-| Some source-built ports complete successfully | **REPORTED BY OPERATOR** | Multiple tools/packages installed while long-running dependency build continues |
-| Snapshot of `port installed` and requested ports | **PENDING** | Not received for Golden Gate C in a publication-safe form |
-| Verified architecture, invocation and variants per port | **PENDING** | Must test individual installed binaries; no inferred port checklist |
-| Full requested package set installed | **IN PROGRESS** | Active build still running when this milestone was published |
+| `python314` | `@3.14.10_0+lto+optimizations` | **Installed / active** |
+| `py314-pip` | `@26.2.2_0` | **Installed / active** |
+| `git` | `@2.56.1_0+credential_osxkeychain+diff_highlight+doc+pcre+perl5_34` | **Installed / active** |
+| `curl` | `@8.23.0_1+brotli+http2+idn+psl+ssl+zstd` | **Installed / active** |
+| `wget` | `@1.25.0_1+gnutls` | **Installed / active** |
+| `rsync` | `@3.5.1_0` | **Installed / active** |
+| `jq` | `@1.8.2_0` | **Installed / active** |
+| `htop` | `@3.5.3_0` | **Installed / active** |
+| `tree` | `@2.3.2_0` | **Installed / active** |
+| `coreutils` | `@9.12_0` | **Installed / active** |
+| `xz` | `@5.8.4_0` | **Installed / active** |
+| `zstd` | `@1.5.7_0` | **Installed / active** |
+| `7zip` | `@26.06_0` | **Installed / active** |
+| `smartmontools` | `@7.5_0+attributelog+savestates` | **Installed / active** |
+| `iperf3` | `@3.22.1_0` | **Installed / active** |
 
-**No port names have been pre-marked complete.** A prior report enumerated 117 installed ports on the separate **Tahoe** volume. Those are **not** an inventory of Golden Gate C.
+All 15 names and versions also match the 173-entry registry list. The remaining 158 are other active ports in this environment; the source snapshot does **not** classify every one as a dependency rather than an independently requested port. The MacPorts `requested` flag itself has not been audited.
 
-> **Interim operator report (23 November):** **138 active ports** on Golden Gate C were reported at one checkpoint, while `coreutils` was still being processed. An attempt to configure `wget` encountered a source URL returning **HTTP 404**. The count is not an audited per-port export and does **not** establish 138 successful source builds or runtime tests. Keep `ports.csv` empty until individual receipts are available.
+## Reproducible inventory
 
-### Evidence for missing binary archives
+- [**Operator report, original 15-port check and 173-entry registry snapshot**](evidence/macports-basic-20261124.md). This is the evidence source for the counts and versions.
+- [**Machine-readable inventory: 173 rows**](ports.csv) records name, version, revision, variants and installed/active state. Empty architecture fields and `NOT_AUDITED` / `NOT_TESTED` fields are deliberate: host architecture is known, individual binaries and source-build receipts are not independently certified.
+- [**Read-only inventory collection script**](collect-macports.sh) supports later updates without modifying MacPorts or the boot volume.
 
-The MacPorts CLI attempted Darwin 27 Intel archive endpoints and received unavailable-archive responses, then moved to locally building source dependencies. A 23 November physical observation found a running `clang` process within the MacPorts process tree (77.4% sampled CPU at 16:23). The current compiling port is not reliably identified by that snapshot alone.
+**Chronology:** on **23 November**, the provisional checkpoint recorded **138 active ports**; `coreutils` was still being processed and an attempt to configure `wget` hit an HTTP 404. The **24 November** report supersedes that *current-state* figure: both `coreutils @9.12_0` and `wget @1.25.0_1+gnutls` are now listed installed/active. The previous incident remains in [the event log](CHRONOLOGY.md).
 
-## Update workflow — one row for each confirmed port
+### What this proves — and what it does not
 
-A port graduates through distinct **checked evidence gates**:
+The HAO-adapted CLT/Clang toolchain on Intel has previously demonstrated working MacPorts source-build fallback; the **present report establishes 15 requested BASIC targets and 173 active installed ports**. It does **not** demonstrate that each of the 173 was individually compiled locally from source, or that all 173 passed application-level runtime tests. Track each future source-build exit code, binary architecture and smoke test independently; do not infer success merely from `active`.
 
-- [x] MacPorts **2.12.7** base available on experimental C.
-- [x] Adapted Apple CLT/HAO compiles and links x86_64.
-- [x] MacPorts can start the source-build fallback.
-- [ ] Capture definitive **C-only** `port installed`, `port echo requested` and `port installed active` after the ongoing build.
-- [ ] Add each port's **name**, **version**, **revision**, **variants**, **requested/dependency**, installed/active status and supporting log reference to [ports.csv](ports.csv).
-- [ ] Mark **build PASS** only after the relevant MacPorts build finishes with exit 0.
-- [ ] Mark **runtime PASS** only after an installed x86_64 program or library's representative operation is checked.
-- [ ] Publish a final package summary with package count and failures **only when the current operation completes**.
-
-### Current verified-port table
-
-| Port | Version / variants | Build | Installed & active | Runtime tested | Evidence |
-|:--|:--|:--|:--|:--|:--|
-| *Awaiting definitive Golden Gate C inventory* | — | — | — | — | `ports.csv` is intentionally unpopulated |
-
-This is a **deliberately incomplete registry**, not a claim that no packages installed. The operator has explicitly observed successful installations; the specific list will be added only from original receipts.
-
-## How to add verified packages later
-
-Run [collect-macports.sh](collect-macports.sh) **after** an installation batch ends. It creates a local report and does not modify MacPorts or boot state. Compare the report with MacPorts build logs, check actual binaries and then append a single row to `ports.csv`. Update the table above and the project README milestone counts without rewriting historical events.
-
-For each added row, make `build_status` and `runtime_status` explicit, e.g. `PASS`, `FAIL` or `PENDING`, instead of interpreting “active” as a successful functional test. Preserve failures and retries in the [chronological record](CHRONOLOGY.md) with the timestamp.
-
-### MacPorts versus platform compatibility
-
-MacPorts' default `buildfromsource ifneeded` policy can try a compatible archive first and build locally when none matches. Binary packages must match relevant platform/arch, versions, variants and prefix; Darwin 25 Intel archives are **not automatically** valid on Darwin 27 Intel. Source-built archives can be cached or later produced on faster compatible Intel machines after ABI/deployment checks.
-
-**No Homebrew dependency is required for the verified C toolchain.**
+Earlier counts from a separate Tahoe installation are **not** included. This is a Golden Gate macOS 27.2.1 / 26B131 inventory. Third-party components retain their respective licenses.

@@ -20,7 +20,7 @@
 > **Un desktop funcțional, dar nu încă o distribuție finalizată.** Pe **19 noiembrie 2026**, macOS Golden Gate 27.2.1 (26B131) a ajuns la Setup Assistant, configurarea contului și desktop pe un **MacBook Pro real de 15″, Mid 2012**, pornind de pe SSD USB extern. Autentificarea a reușit și după restart. Pe **20 noiembrie**, a doua imagine a primit reparații verificate pe laptop. **Etapa 1 este încheiată; proiectul rămâne experimental.**
 
 <!-- GOLDEN-GATE-C-20261123-START -->
-## Etapa C — Clang, Xcode 27.2 și MacPorts pe Intel (23 noiembrie 2026)
+## Etapa C — Clang, Xcode 27.2 și MacPorts pe Intel (23–24 noiembrie 2026)
 
 > **Realizare nouă pe MacBookPro9,1 real din 2012:** Apple CLT **27.2 / Clang 21** compilează și execută prin HAO **programe native x86_64 în C, C++, LTO și make**. Au trecut și **compilările directe Clang pentru ARM64 și Universal 2**. Xcode **27.2 (27B52)** a produs **cinci proiecte x86_64** și **10/10 builduri ARM64/Universal 2** (C, C++17, Objective-C, Swift, AppKit), cu arhitecturile verificate prin Mach-O și `lipo`.
 
@@ -31,7 +31,7 @@
 | **CLT Intel** | C, C++, `-flto`, `make` și Python 3.14.10 x86_64 **PASS** |
 | **Clang arhitecturi suplimentare** | **ARM64-direct PASS** · **Universal2-direct PASS** |
 | **Xcode** | **5 proiecte Intel + 10/10 ARM64/Universal 2** cu `xcodebuild` și Swift Build 6.4.2 nativ Intel |
-| **MacPorts 2.12.7** | Am făcut posibilă compilarea pachetelor din surse cu CLT adaptat. **Raport intermediar al operatorului: 138 de porturi active; compilările continuă.** Nu înseamnă 138 de builduri din surse sau teste de execuție validate individual. |
+| **MacPorts 2.12.7** | Am făcut posibilă compilarea pachetelor din surse cu CLT adaptat. **Toate cele 15/15 porturi BASIC selectate sunt instalate și active; inventarul din 24 noiembrie cuprinde 173 de porturi active în total (inclusiv pachete auxiliare/dependențe).** Raportul confirmă instalarea; proveniența compilării din surse și testele individuale de execuție rămân necertificate. |
 | **HAO / APFS** | Repararea hardlinkurilor comprimate, **84 fișiere System + 3 configurații Data**, boot confirmat din snapshotul CLT nou |
 
 **Documentația și dovezile, în ordinea execuției:** [**Prezentarea build-ului C (RO)**](golden-gate/build-c/README.ro.md) · [English](golden-gate/build-c/README.md) · [Cronologie](golden-gate/build-c/CHRONOLOGY.ro.md) · [Probe Clang (RO)](golden-gate/build-c/TOOLCHAIN-EVIDENCE.ro.md) · [EN](golden-gate/build-c/TOOLCHAIN-EVIDENCE.md) · [Xcode — 15 proiecte](golden-gate/build-c/XCODE.ro.md) · [Registrul MacPorts](golden-gate/build-c/MACPORTS.ro.md).

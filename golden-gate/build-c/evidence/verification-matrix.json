@@ -1,6 +1,6 @@
 {
   "schema": "goldengate-stage-c-evidence-v1",
-  "recorded": "2026-11-23",
+  "recorded": "2026-11-24",
   "hardware": {
     "model": "MacBookPro9,1",
     "os": "macOS 27.2.1",
@@ -123,9 +123,9 @@
   },
   "macports": {
     "base": "2.12.7",
-    "native_build_pipeline": "in-progress",
-    "several_installations": "operator-reported",
-    "complete_tested_port_list": "pending",
+    "native_build_pipeline": "source fallback demonstrated earlier; per-port build provenance not independently audited",
+    "several_installations": "superseded by 24 Nov installed/active registry snapshot",
+    "complete_tested_port_list": "pending: individual runtime and build-origin tests",
     "inventory_file": "ports.csv",
     "interim_operator_report": {
       "recorded": "2026-11-23",
@@ -135,6 +135,44 @@
       "wget": "configure blocked: source URL returned HTTP 404",
       "audited_source_build_count": "pending",
       "audited_runtime_test_count": "pending"
+    },
+    "active_inventory_file": "ports.csv",
+    "latest_operator_inventory": {
+      "captured_at_eet": "2026-11-24 09:57:40 EET",
+      "captured_at_utc": "2026-11-24T07:57:40Z",
+      "hardware": "MacBookPro9,1",
+      "macos": "27.2.1",
+      "build": "26B131",
+      "arch_host": "x86_64",
+      "macports_version": "2.12.7",
+      "selected_basic_count": 15,
+      "selected_basic_installed_active": 15,
+      "selected_basic_ports": [
+        "python314",
+        "py314-pip",
+        "git",
+        "curl",
+        "wget",
+        "rsync",
+        "jq",
+        "htop",
+        "tree",
+        "coreutils",
+        "xz",
+        "zstd",
+        "7zip",
+        "smartmontools",
+        "iperf3"
+      ],
+      "active_total": 173,
+      "additional_active_count": 158,
+      "icu": "@78.3_1",
+      "basic_and_inventory_versions_match": true,
+      "source_report": "evidence/macports-basic-20261124.md",
+      "machine_inventory": "ports.csv",
+      "per_port_source_build_provenance": "not audited",
+      "per_port_runtime_smoke_tests": "not tested",
+      "requested_dependency_flags": "not audited"
     }
   },
   "provenance": {

@@ -28,6 +28,7 @@
 | **22–23 Nov** | C-20 | Install MacPorts 2.12.7 and build sources for Darwin 27 x86_64 through adapted CLT/HAO | Several ports have installed according to operator; other source builds still active; final inventory pending |
 | **23 Nov** | C-21 | Evaluate newer upstream installer/EFI and Metal r12 changes in private builder sources; investigate WeatherKit/VFX and EFI separately | Selected source tests PASS; **not** promoted to a new booted C image, not Weather/EFI fixes |
 | **23 Nov (interim)** | C-22 | Record MacPorts progress without interrupting a running batch | Operator-reported **138 active ports**; `coreutils` still being processed and `wget` configure blocked by a source URL returning 404. **Not** a per-port source-build/runtime audit |
+| **24 Nov 09:57:40 EET** | C-23 | Capture BASIC profile and full MacPorts registry on the Golden Gate MacBookPro9,1 | **15/15 selected ports installed/active; 173 distinct active ports total**, including ICU 78.3_1. The formerly blocked `wget` and ongoing `coreutils` are now active. [Source report](evidence/macports-basic-20261124.md) and [173-row CSV](ports.csv); individual source-build/runtime certification not claimed |
 
 ## Important interpretation
 
