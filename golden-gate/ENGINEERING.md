@@ -5,7 +5,7 @@
 This document separates **verified hardware measurements**, **operator observations**, **build provenance**, and **unresolved issues**. The subject is the 15-inch MacBookPro9,1 adaptation of [lythka's HAO](https://github.com/lythka/hao-patcher), not the upstream single-GPU MacBookPro9,2.
 
 > [!IMPORTANT]
-> **Stage C technical supplement (21–23 November 2026):** [Chronology](build-c/CHRONOLOGY.md), [CLT/Clang evidence](build-c/TOOLCHAIN-EVIDENCE.md), [Xcode Intel/ARM64/Universal 2](build-c/XCODE.md), and the [live MacPorts ledger](build-c/MACPORTS.md). The measurements below describe the earlier hardware A/B milestone and remain in chronological context.
+> **Stage C technical supplement (21–25 November 2026):** [Chronology](build-c/CHRONOLOGY.md), [CLT/Clang evidence](build-c/TOOLCHAIN-EVIDENCE.md), [Xcode Intel/ARM64/Universal 2](build-c/XCODE.md), and the [live MacPorts ledger](build-c/MACPORTS.md). The measurements below describe the earlier hardware A/B milestone and remain in chronological context.
 
 ## The engineering question
 
@@ -68,7 +68,7 @@ These results establish **observed graphics switching**, while hardware stabilit
 
 **User-confirmed working:** Wi-Fi, Bluetooth, Ethernet, keyboard, mouse, trackpad, keyboard backlighting, display backlight and brightness controls, volume keys, USB and sound. Wi-Fi and Bluetooth remain usable even though the **native menu-bar symbols are not visible**.
 
-**Application launch observation:** all built-in applications tried in the latest hands-on session **opened except Weather**. This is not exhaustive app/function certification. Control Center still has Swift interaction crashes.
+**Application status, updated 25 November (Build C):** Weather now **opens and stays running on the latest booted snapshot**, with animated backgrounds, forecasts, a functioning main map and tested panels. Its **small map preview on the overview is still incomplete**, including after diagnostic GPU switching. The older A/B finding that Weather crashed is historical. Control Center retains separately reported Swift crashes. [25 November evidence and scope](build-c/WEATHER-MENUBAR-20261125.md).
 
 **Battery:** the Foundation/Swift <code>DateComponents</code> fix stopped the crash on opening Battery preferences. **Usage/history graphs are still incorrect.**
 
@@ -85,14 +85,14 @@ Image B retained Intel HD 4000 and GT 650M drivers but removed two Kepler overri
 | Window dragging | SkyLight Option-state ABI correction | Normal dragging without unwanted tiling |
 | Battery preferences | Foundation Swift <code>DateComponents</code> bridge fix | Pane opens, period selectors work; charts remain wrong |
 
-[Image B repair ledger](REGISTRU-TEHNIC-B.md) · [A/B chronology](ISTORIC-A-B.md).
+[Image B repair ledger](REGISTRU-TEHNIC-B.md) · [A/B chronology](ISTORIC-A-B.md). These are the historical A/B results, not the current C application state.
 
 ## Remaining engineering boundaries
 
-- **Visual:** invisible Wi-Fi/Bluetooth menu-bar glyphs; incomplete battery and active-app indicators.
+- **Visual:** battery/speaker menu-bar icon **orientation corrected** on 25 November after reboot; Wi-Fi/Bluetooth glyphs and some other indicators remain unconfirmed/unfinished.
 - **Storage:** NTFS/exFAT mounting remains unsuccessful.
 - **Battery:** pane repaired; history/usage graphs still incomplete.
-- **Applications:** Weather fails to open; some Control Center actions crash.
+- **Applications:** Weather opens reliably and major features work on latest Build C; the **overview mini-map preview** remains unfinished. Some Control Center actions still crash.
 - **Displays:** direct external-video and GMUX switching have positive observations; Thunderbolt hub hot-unplug has a documented black-screen failure; NVIDIA transparency artifacts persist.
 - **HAO payload:** local runtime bootstrap does not reproduce the full upstream external interface-unit/thunk selection or optional async provider. This is a **coverage gap**, not a confirmed explanation for each remaining defect.
 - **Distribution:** no public Apple OS image, general installer, or cross-model support claim.

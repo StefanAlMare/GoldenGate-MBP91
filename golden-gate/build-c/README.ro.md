@@ -1,4 +1,4 @@
-# Golden Gate — Build C | Actualizat 24 noiembrie 2026
+# Golden Gate — Build C | Actualizat 25 noiembrie 2026
 
 [**Română**](README.ro.md) · [**English**](README.md) · [Pagina principală](../../README.ro.md)
 
@@ -17,14 +17,17 @@
 | **Xcode 27.2 (27B52)** | 5 proiecte Intel plus **10/10** builduri ARM64 și Universal 2; C, C++17, Objective-C, Swift și AppKit | `xcodebuild` verificat, `⌘B` din interfață încă netestat |
 | **MacPorts 2.12.7** | Compilare/instalare din surse prin HAO/CLT; **15/15 porturi BASIC instalate și active**, **173 porturi active** în total (24 nov., 09:57 EET); [inventar complet](ports.csv) | Compilarea fiecăruia din surse și testarea fiecărui program nu sunt certificate |
 | **HAO / APFS** | Backend corectat, 77 legături recuperate, **84/84 System** și **3/3 CFG Data**, boot din snapshot nou | Copie C experimentală, System/Data se restaurează separat |
+| **Vremea (25 nov.)** | Pornește stabil; fundalul animat, prognoza, harta mare și panourile testate funcționează | **Miniatura hărții de pe pagina principală rămâne incompletă** |
+| **Orientarea pictogramelor** | Bateria are capătul spre dreapta, iar sunetul undele spre dreapta, după restart | Alte pictograme/indicatori și datele bateriei nu sunt certificate |
 
 ### Documentație în ordinea execuției
 
-1. [Cronologia (20–23 noiembrie)](CHRONOLOGY.ro.md) · [English](CHRONOLOGY.md)
+1. [Cronologia (20–25 noiembrie)](CHRONOLOGY.ro.md) · [English](CHRONOLOGY.md)
 2. [Dovezile CLT, HAO și Clang (RO)](TOOLCHAIN-EVIDENCE.ro.md) · [Detalii EN](TOOLCHAIN-EVIDENCE.md)
 3. [Xcode 27.2 — Intel / ARM64 / Universal 2](XCODE.ro.md)
 4. [Registrul MacPorts actualizabil](MACPORTS.ro.md) · [Inventar 173 de porturi](ports.csv)
-5. [Corecția sursă HAO APFS](patches/hao-livepatch-compression.patch) și [colectorul read-only](collect-macports.sh)
+5. [Vremea și pictogramele baterie/sunet — 25 noiembrie](WEATHER-MENUBAR-20261125.ro.md) · [EN](WEATHER-MENUBAR-20261125.md)
+6. [Corecția sursă HAO APFS](patches/hao-livepatch-compression.patch) și [colectorul read-only](collect-macports.sh)
 
 **Separăm dovezile:** PASS fizic sau raportat cu rezultat concret nu înseamnă compatibilitate generală. Porturile care încă se compilează nu sunt marcate finalizate. Compilarea ARM64 pe Intel nu dovedește execuția nativă pe Apple Silicon. [Galeria A/B](../GALLERY.md) păstrează fotografiile reale ale hardwareului.
 

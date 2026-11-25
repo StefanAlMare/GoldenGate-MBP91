@@ -2,7 +2,7 @@
 
 [**English**](CHRONOLOGY.md) · [**Română**](CHRONOLOGY.ro.md) · [Overview](README.md)
 
-**Period:** 20–23 November 2026, starting after the last published A/B hardware milestone. Target: **MacBookPro9,1**, macOS **27.2.1 (26B131)**. Entries are in execution order, including failures, recoveries, and unfinished work. Sources: Work2/Work3 handover, local CLT/LD test reports, Xcode proof document (23 November), operator Clang report and macOS physical observations. This is not a claim of a turnkey installer.
+**Period:** 20–25 November 2026, starting after the last published A/B hardware milestone. Target: **MacBookPro9,1**, macOS **27.2.1 (26B131)**. Entries are in execution order, including failures, recoveries, and unfinished work. Sources: Work2/Work3 handover, local CLT/LD test reports, Xcode proof document (23 November), operator Clang report and macOS physical observations. This is not a claim of a turnkey installer.
 
 | Date | Step | Operation | Recorded outcome |
 |:--|:--|:--|:--|
@@ -29,6 +29,9 @@
 | **23 Nov** | C-21 | Evaluate newer upstream installer/EFI and Metal r12 changes in private builder sources; investigate WeatherKit/VFX and EFI separately | Selected source tests PASS; **not** promoted to a new booted C image, not Weather/EFI fixes |
 | **23 Nov (interim)** | C-22 | Record MacPorts progress without interrupting a running batch | Operator-reported **138 active ports**; `coreutils` still being processed and `wget` configure blocked by a source URL returning 404. **Not** a per-port source-build/runtime audit |
 | **24 Nov 09:57:40 EET** | C-23 | Capture BASIC profile and full MacPorts registry on the Golden Gate MacBookPro9,1 | **15/15 selected ports installed/active; 173 distinct active ports total**, including ICU 78.3_1. The formerly blocked `wget` and ongoing `coreutils` are now active. [Source report](evidence/macports-basic-20261124.md) and [173-row CSV](ports.csv); individual source-build/runtime certification not claimed |
+| **24–25 Nov** | C-24 | Iterate on Weather/graphics compatibility; compare Intel and NVIDIA rendering and test background / preview paths | Weather progresses from startup failures to a functioning main view. Diagnostics on both GPUs isolate the preview as an unresolved path; earlier source/probe successes are **not** proof of complete mini-map rendering |
+| **25 Nov, latest C snapshot** | C-25 | Test Weather after reboot on physical MacBookPro9,1 | **Launch PASS without spontaneous termination**; animated background and main weather map work, forecasts and tested weather panels populate; **overview small map preview remains incomplete**. Operator's 23:29:29 EET screen capture (local, not committed) and Work4 observations |
+| **25 Nov, after reboot** | C-26 | Confirm battery and sound menu-bar icon orientation | **PASS (operator visual check):** battery terminal on right and speaker sound waves on right; no claim of corrected battery level, charging history or Wi-Fi/Bluetooth icons. [Details](WEATHER-MENUBAR-20261125.md) |
 
 ## Important interpretation
 

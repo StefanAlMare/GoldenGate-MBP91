@@ -1,6 +1,6 @@
 {
   "schema": "goldengate-stage-c-evidence-v1",
-  "recorded": "2026-11-24",
+  "recorded": "2026-11-25",
   "hardware": {
     "model": "MacBookPro9,1",
     "os": "macOS 27.2.1",
@@ -179,5 +179,32 @@
     "clt_staging_manifest_sha256": "bcfe4f590d36fee1f206206c1a8d1036ee5af39356c3dab5fbe0fb5342ca4581",
     "hao_runtime_candidate_sha256": "59e5fdf95a166a5b30dbc6250eb3842400c3d24818d858fe69a16878c9021fcc",
     "hao_backend_patch_sha256": "0e7c507e1b1b77ce45523f96f06b93da25a6e56a27342a0b9172055f383f2581"
+  },
+  "desktop_compatibility": {
+    "snapshot": "latest booted Golden Gate C snapshot; UUID not independently recorded in this documentation update",
+    "weather": {
+      "status": "pass-operator",
+      "startup": "launches normally and remains open; no spontaneous termination observed on latest snapshot",
+      "animated_background": "pass-operator",
+      "forecast_and_overview_panels": "pass-operator",
+      "main_weather_map": "pass-operator",
+      "overview_small_map_preview": "pending (still incomplete)",
+      "gpu_comparison": "preview remained unresolved on Intel and NVIDIA in Work4 diagnostics",
+      "visual_evidence": "operator screenshot from 2026-11-25 23:29:29 EET; retained locally, not redistributed",
+      "remaining_scope": "individual forecast/map layers and edge cases not exhaustively certified"
+    },
+    "menu_bar": {
+      "status": "pass-operator",
+      "tested_after_reboot": true,
+      "battery_icon_orientation": "terminal faces right (confirmed)",
+      "speaker_icon_orientation": "sound waves face right (confirmed)",
+      "battery_state_or_usage_graphs": "not certified by icon orientation result",
+      "wifi_bluetooth_icons": "not certified by this result"
+    },
+    "project_stage_D": {
+      "status": "planning only",
+      "description": "future work on former B USB; no successful new D build or boot claimed"
+    },
+    "details": "WEATHER-MENUBAR-20261125.md"
   }
 }

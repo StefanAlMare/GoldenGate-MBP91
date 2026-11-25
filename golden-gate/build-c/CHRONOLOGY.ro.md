@@ -2,7 +2,7 @@
 
 [**Română**](CHRONOLOGY.ro.md) · [**English**](CHRONOLOGY.md) · [Prezentare](README.ro.md)
 
-Perioada **20–23 noiembrie 2026**, după ultima publicare A/B. Mașina: MacBookPro9,1, Golden Gate **27.2.1 (26B131)**. Sunt păstrate și încercările eșuate, în ordinea reală a operațiilor. Surse: Work2, Work3, arhivele CLT/LD, raportul Xcode din 23 noiembrie și probele operatorului.
+Perioada **20–25 noiembrie 2026**, după ultima publicare A/B. Mașina: MacBookPro9,1, Golden Gate **27.2.1 (26B131)**. Sunt păstrate și încercările eșuate, în ordinea reală a operațiilor. Surse: Work2, Work3, arhivele CLT/LD, raportul Xcode din 23 noiembrie și probele operatorului.
 
 | Data | Pas | Ce am făcut | Rezultat |
 |:--|:--|:--|:--|
@@ -29,6 +29,9 @@ Perioada **20–23 noiembrie 2026**, după ultima publicare A/B. Mașina: MacBoo
 | **23 nov.** | C-21 | Actualizări upstream evaluate privat pentru constructor, EFI și Metal r12; diagnostic WeatherKit/VFX | Teste de sursă, fără promovare în build C nou, fără a pretinde că Weather/EFI sunt rezolvate |
 | **23 nov. (intermediar)** | C-22 | Consemnarea progresului MacPorts, fără întreruperea lotului în lucru | Operatorul a raportat **138 de porturi active**; `coreutils` era încă în procesare, iar configurarea `wget` a întâlnit un URL sursă cu eroare 404. **Nu** este inventarul buildurilor/testelor verificate individual |
 | **24 nov. 09:57:40 EET** | C-23 | Inventarierea BASIC și a întregului registru MacPorts pe MacBookPro9,1 | **15/15 porturi selectate instalate/active; 173 de porturi distincte active în total**, inclusiv ICU 78.3_1. `wget` și `coreutils` sunt acum active. [Raport original](evidence/macports-basic-20261124.md) și [CSV 173 de porturi](ports.csv); fără a pretinde teste individuale de compilare/execuție |
+| **24–25 nov.** | C-24 | Probe repetate Vremea/grafică pe Intel și NVIDIA, fundal animat și miniatură | S-a trecut de blocajele inițiale de lansare la ecranul principal funcțional. Miniatura rămâne în lucru pe ambele GPU; reușita unor probe grafice nu demonstrează randarea completă a mini-hărții |
+| **25 nov., ultimul snapshot C** | C-25 | Verificare Vremea după repornire pe MacBookPro9,1 | **Pornire stabilă, fără închidere spontană**; fundal animat, hartă mare, prognoze și panouri meteo populate; **miniatura hărții de pe pagina principală rămâne incompletă**. Captură reală de la 23:29:29 EET (păstrată local) și observații Work4 |
+| **25 nov., după repornire** | C-26 | Verificare orientare pictograme în bara de meniu | **PASS vizual:** capătul bateriei spre dreapta și undele difuzorului spre dreapta; fără a pretinde corectitudinea nivelului bateriei sau repararea simbolurilor Wi-Fi/Bluetooth. [Detalii](WEATHER-MENUBAR-20261125.ro.md) |
 
 **Precizări:** compilarea ARM64 nu dovedește rularea nativă pe Apple Silicon. Pentru Xcode, buildurile CLI sunt demonstrate, dar `⌘B` interactiv și interfața AppKit cer probe distincte. Snapshotul LD este consemnat ca selectat; o probă separată de reboot din el nu trebuie inventată. Modificările Data nu se retrag doar prin revenirea la snapshotul System anterior.
 

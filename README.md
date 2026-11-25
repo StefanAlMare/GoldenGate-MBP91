@@ -20,7 +20,7 @@
 > **A working desktop, not yet a finished distribution.** On **19 November 2026**, Golden Gate 27.2.1 (26B131) reached Setup Assistant, account creation and the desktop on a real **15-inch Mid 2012 MacBook Pro**, booting from an external USB SSD. Restart and sign-in were subsequently confirmed. On **20 November**, a second image received focused repairs verified on the laptop. **Stage 1 is complete; the project remains experimental.**
 
 <!-- GOLDEN-GATE-C-20261123-START -->
-## Stage C — Clang, Xcode 27.2 and MacPorts on Intel (23–24 November 2026)
+## Stage C — Toolchain, MacPorts and desktop compatibility (23–25 November 2026)
 
 > **New milestone on the real 2012 MacBookPro9,1:** Apple CLT **27.2 / Clang 21** now compiles and runs **native x86_64 C, C++, LTO and make** programs through HAO. **Direct Clang builds for ARM64 and Universal 2 also PASS.** Xcode **27.2 (27B52)** has produced **5 successful x86_64 projects** and **10/10 ARM64/Universal 2 builds** (C, C++17, Objective-C, Swift, AppKit), with Universal 2 architectures verified in Mach-O and with `lipo`.
 
@@ -33,6 +33,10 @@
 | **Xcode compilation** | **5 Intel projects + 10/10 ARM64/Universal 2**, using `xcodebuild` and a native Intel Swift Build 6.4.2 service |
 | **MacPorts 2.12.7** | We enabled source builds with our adapted Apple toolchain. **15/15 selected BASIC ports installed and active; 173 active ports overall (including supporting packages/dependencies) in the 24 November registry inventory.** Installation status is verified from the supplied report; per-port source-build origin and runtime testing are not. |
 | **HAO / APFS integration** | Corrected compressed hardlink handling; **84 System + 3 Data CFG** components installed; new CLT snapshot boot confirmed |
+| **Weather (25 Nov)** | **Opens reliably on the latest C snapshot, without spontaneous termination**; animated backgrounds, forecasts, main weather map and tested detail panels work. **The small map preview on the overview remains unfinished.** | Operator screenshot and latest physical observation; not full graphics-map certification |
+| **Menu-bar battery and sound** | Correct icon orientation confirmed after reboot (battery terminal right; speaker sound waves right). | Does not establish battery level/charging accuracy or repair other missing icons |
+
+**[25 November Weather / menu-bar milestone](golden-gate/build-c/WEATHER-MENUBAR-20261125.md)** · **[Română](golden-gate/build-c/WEATHER-MENUBAR-20261125.ro.md)**
 
 **Read the full evidence, source patch and temporal sequence:** [**Build C technical index (EN)**](golden-gate/build-c/README.md) · [Română](golden-gate/build-c/README.ro.md) · [Chronological record](golden-gate/build-c/CHRONOLOGY.md) · [Clang evidence](golden-gate/build-c/TOOLCHAIN-EVIDENCE.md) · [Xcode 15-project matrix](golden-gate/build-c/XCODE.md) · [MacPorts live ledger](golden-gate/build-c/MACPORTS.md).
 
@@ -108,7 +112,7 @@ This is stronger evidence than finding both GPUs in System Information. It is **
 
 ## Desktop and applications
 
-**Every built-in application tried in the latest hands-on testing opened, except Weather.** This is the operator's report—not a claim that every Apple application and every feature has been exhaustively certified.
+**Current Build C (25 November): Weather now launches without crashing and displays animated backgrounds, forecasts and the main weather map.** The smaller map preview on the overview is still incomplete. This supersedes the earlier A/B observation that Weather would not open; it is not a claim that every app or Weather feature is fully certified.
 
 The usable desktop includes **Finder, Dock, window management, System Settings and Photos**, alongside the other apps tested. The second build also received verified, measurable fixes:
 
@@ -119,7 +123,7 @@ The usable desktop includes **Finder, Dock, window management, System Settings a
 | **Window management** | SkyLight Option-key state bridge correction | Windows drag normally without unwanted tiling |
 | **Battery preferences** | Foundation/Swift <code>DateComponents</code> compatibility repair | Battery pane no longer crashes on opening; period selectors work, **charts still incorrect** |
 
-**Weather** remains the notable app that will not open. Some **Control Center** interactions still produce Swift crashes even though the desktop and most tested applications launch.
+**Weather now runs on the latest C snapshot**; the overview's small map preview remains outstanding. The battery and speaker menu-bar icons also have the correct orientation after reboot. Some **Control Center** interactions still produce Swift crashes, and other desktop visual issues remain under investigation. [Detailed 25 November status](golden-gate/build-c/WEATHER-MENUBAR-20261125.md).
 
 [**Image B repair ledger**](golden-gate/REGISTRU-TEHNIC-B.md)
 
@@ -174,7 +178,7 @@ This documents **a working configuration on one physical Mac**, not a universal 
 | **Wi-Fi and Bluetooth menu-bar icons** | **Missing/invisible**, despite functioning radios and clickable controls |
 | **NTFS and exFAT** | **Neither filesystem has been successfully mounted** in the documented Golden Gate setup |
 | **Battery usage graphs** | Battery panel crash **fixed**, but displayed history/usage **not yet correct** |
-| **Weather** | **Does not open** in the documented build |
+| **Weather mini-map preview** | **Weather itself now launches and operates** on Build C; the small map preview on the overview page is still incomplete |
 | **Control Center / desktop polish** | Some Swift crashes, incomplete battery/menu icons and inconsistent active-app indicators |
 | **Thunderbolt / monitor hot-unplug** | External HDMI via the hub worked at startup but unplugging it previously blanked both screens; direct adapter tests worked |
 | **NVIDIA rendering** | Some remaining visual artifacts in transparencies and borders |
@@ -205,7 +209,7 @@ The [original HAO gallery](docs/gallery.md) illustrates the **13-inch MacBookPro
 
 ## Next chapter
 
-**Stage 1 closed on 20 November 2026.** The next objectives are correcting the wireless menu-bar symbols, restoring NTFS/exFAT mounts and battery charts, improving Weather and Control Center behavior, completing GMUX/Thunderbolt hot-plug validation, and evaluating the remaining external HAO ABI components.
+**Stage 1 closed on 20 November 2026.** Build C has now restored Weather's launch and major display features, plus battery/sound icon orientation. Next: complete Weather's small map preview, investigate the still-missing Wi-Fi/Bluetooth icons, NTFS/exFAT mounts, battery usage graphs and Control Center, then continue GMUX/Thunderbolt and HAO ABI validation.
 
 ## People and credits
 

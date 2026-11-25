@@ -20,11 +20,11 @@
 > **Un desktop funcțional, dar nu încă o distribuție finalizată.** Pe **19 noiembrie 2026**, macOS Golden Gate 27.2.1 (26B131) a ajuns la Setup Assistant, configurarea contului și desktop pe un **MacBook Pro real de 15″, Mid 2012**, pornind de pe SSD USB extern. Autentificarea a reușit și după restart. Pe **20 noiembrie**, a doua imagine a primit reparații verificate pe laptop. **Etapa 1 este încheiată; proiectul rămâne experimental.**
 
 <!-- GOLDEN-GATE-C-20261123-START -->
-## Etapa C — Clang, Xcode 27.2 și MacPorts pe Intel (23–24 noiembrie 2026)
+## Etapa C — toolchain, MacPorts și compatibilitate desktop (23–25 noiembrie 2026)
 
 > **Realizare nouă pe MacBookPro9,1 real din 2012:** Apple CLT **27.2 / Clang 21** compilează și execută prin HAO **programe native x86_64 în C, C++, LTO și make**. Au trecut și **compilările directe Clang pentru ARM64 și Universal 2**. Xcode **27.2 (27B52)** a produs **cinci proiecte x86_64** și **10/10 builduri ARM64/Universal 2** (C, C++17, Objective-C, Swift, AppKit), cu arhitecturile verificate prin Mach-O și `lipo`.
 
-![Clang](https://img.shields.io/badge/Clang_21-x86__64_ARM64_Universal_2-247a5a?style=flat-square) ![Xcode](https://img.shields.io/badge/Xcode_27.2-10%2F10_ARM%2BUniversal-247a5a?style=flat-square) ![MacPorts](https://img.shields.io/badge/MacPorts_2.12.7-compilare_din_surse_in_curs-b77d31?style=flat-square)
+![Clang](https://img.shields.io/badge/Clang_21-x86__64_ARM64_Universal_2-247a5a?style=flat-square) ![Xcode](https://img.shields.io/badge/Xcode_27.2-10%2F10_ARM%2BUniversal-247a5a?style=flat-square) ![MacPorts](https://img.shields.io/badge/MacPorts_2.12.7-15_BASIC_173_active-247a5a?style=flat-square)
 
 | Rezultatul etapei C | Starea demonstrată |
 |:--|:--|
@@ -33,6 +33,10 @@
 | **Xcode** | **5 proiecte Intel + 10/10 ARM64/Universal 2** cu `xcodebuild` și Swift Build 6.4.2 nativ Intel |
 | **MacPorts 2.12.7** | Am făcut posibilă compilarea pachetelor din surse cu CLT adaptat. **Toate cele 15/15 porturi BASIC selectate sunt instalate și active; inventarul din 24 noiembrie cuprinde 173 de porturi active în total (inclusiv pachete auxiliare/dependențe).** Raportul confirmă instalarea; proveniența compilării din surse și testele individuale de execuție rămân necertificate. |
 | **HAO / APFS** | Repararea hardlinkurilor comprimate, **84 fișiere System + 3 configurații Data**, boot confirmat din snapshotul CLT nou |
+| **Vremea (25 nov.)** | **Pornește stabil pe ultimul snapshot C, fără închidere spontană**; fundalul animat, prognozele, harta meteo mare și panourile testate funcționează. **Miniatura hărții de pe pagina principală rămâne neterminată.** | Captură și observație directă a operatorului; fără certificare completă a tuturor straturilor meteo |
+| **Pictograme baterie și sunet** | Orientarea corectă confirmată după restart (capătul bateriei spre dreapta; undele difuzorului spre dreapta). | Nu certifică procentul bateriei sau rezolvarea altor pictograme |
+
+**[Realizările Vremea și bara de meniu — 25 noiembrie](golden-gate/build-c/WEATHER-MENUBAR-20261125.ro.md)** · **[English](golden-gate/build-c/WEATHER-MENUBAR-20261125.md)**
 
 **Documentația și dovezile, în ordinea execuției:** [**Prezentarea build-ului C (RO)**](golden-gate/build-c/README.ro.md) · [English](golden-gate/build-c/README.md) · [Cronologie](golden-gate/build-c/CHRONOLOGY.ro.md) · [Probe Clang (RO)](golden-gate/build-c/TOOLCHAIN-EVIDENCE.ro.md) · [EN](golden-gate/build-c/TOOLCHAIN-EVIDENCE.md) · [Xcode — 15 proiecte](golden-gate/build-c/XCODE.ro.md) · [Registrul MacPorts](golden-gate/build-c/MACPORTS.ro.md).
 
@@ -108,7 +112,7 @@ Această funcționare este un rezultat important față de demonstrația origina
 
 ## Desktop și aplicații
 
-**Toate aplicațiile Apple încercate în ultimele teste practice au pornit, cu excepția Weather / Vreme.** Aceasta este observația utilizatorului, **nu o certificare a fiecărei funcții din fiecare aplicație**.
+**Situația actuală în Build C (25 noiembrie): Vremea pornește fără să se mai închidă singură și afișează fundalul animat, prognozele și harta meteo mare.** Miniatura hărții de pe pagina principală rămâne incompletă. Aceasta înlocuiește observația istorică A/B potrivit căreia aplicația nu pornea; nu certifică toate funcțiile.
 
 Desktopul utilizabil include **Finder, Dock, gestionarea ferestrelor, Configurări sistem și Photos**, alături de celelalte aplicații încercate. Imaginea B a primit și reparații confirmate:
 
@@ -119,7 +123,7 @@ Desktopul utilizabil include **Finder, Dock, gestionarea ferestrelor, Configură
 | **Tragerea ferestrelor** | Corecție SkyLight pentru starea tastei Opțiune | Ferestrele se deplasează normal, fără mozaicare necerută |
 | **Configurări → Baterie** | Corecție de compatibilitate Foundation/Swift pentru <code>DateComponents</code> | Panoul nu mai cade la deschidere și selecția perioadelor funcționează; **graficele rămân incorecte** |
 
-**Weather** este aplicația care încă nu se deschide. Unele interacțiuni din **Centrul de control** pot produce în continuare erori Swift, deși desktopul și majoritatea aplicațiilor pornesc.
+**Vremea funcționează acum pe ultimul snapshot C**, singurul element încă nefinalizat din testele actuale fiind miniatura hărții de pe pagina principală. Pictogramele bateriei și sunetului au acum orientarea corectă după repornire. Unele interacțiuni din **Centrul de control** pot produce în continuare erori Swift. [Raportul din 25 noiembrie](golden-gate/build-c/WEATHER-MENUBAR-20261125.ro.md).
 
 [**Registrul reparațiilor imaginii B**](golden-gate/REGISTRU-TEHNIC-B.md)
 
@@ -174,7 +178,7 @@ Aceasta este **o intervenție demonstrată pe calculatorul respectiv**, nu un re
 | **Pictogramele Wi-Fi și Bluetooth** | **Nu sunt vizibile în bara de meniu**, deși dispozitivele și zonele de control funcționează |
 | **NTFS și exFAT** | **Volumele nu au putut fi montate cu succes** în configurația Golden Gate documentată |
 | **Graficele bateriei** | Eroarea de deschidere a panoului este **rezolvată**, dar **graficele de consum și utilizare încă nu sunt corecte** |
-| **Weather / Vreme** | **Nu se deschide** în imaginea documentată |
+| **Miniatura hărții din Vremea** | **Aplicația pornește și funcționează** pe Build C; miniatura hărții meteo din pagina principală încă nu este gata |
 | **Control Center și interfață** | Unele căderi Swift, simboluri incomplete și indicatori de aplicații active inconsistenți |
 | **Thunderbolt / video extern** | HDMI prin hub funcționează la pornire, dar o deconectare anterioară a lăsat ambele ecrane negre; conexiunea directă a funcționat |
 | **Randarea NVIDIA** | Unele transparențe și contururi prezintă artefacte |
@@ -205,7 +209,7 @@ Aceasta este **o intervenție demonstrată pe calculatorul respectiv**, nu un re
 
 ## Ce urmează
 
-**Etapa 1 s-a încheiat la 20 noiembrie 2026.** Urmează reparațiile pentru simbolurile Wi-Fi/Bluetooth, montarea NTFS/exFAT, graficele bateriei, Weather și Control Center, plus validarea suplimentară GMUX/Thunderbolt și a compatibilității ABI Hao.
+**Etapa 1 s-a încheiat la 20 noiembrie 2026.** Build C a restabilit pornirea și funcțiile principale din Vremea, precum și orientarea pictogramelor bateriei și sunetului. Urmează miniatura hărții din Vremea, simbolurile încă lipsă Wi-Fi/Bluetooth, NTFS/exFAT, graficele bateriei și Control Center, apoi validările GMUX/Thunderbolt și HAO ABI.
 
 ## Autori și credite
 
