@@ -29,6 +29,8 @@
 5. [Vremea și pictogramele baterie/sunet — 25 noiembrie](WEATHER-MENUBAR-20261125.ro.md) · [EN](WEATHER-MENUBAR-20261125.md)
 6. [Corecția sursă HAO APFS](patches/hao-livepatch-compression.patch) și [colectorul read-only](collect-macports.sh)
 
+**Dovadă vizuală nouă:** [Vremea funcțională pe Build C — imaginea 11](../images/mbp91/11-weather-working-build-c-20261125.webp), cu explicații bilingve în [galerie](../GALLERY.md).
+
 **Separăm dovezile:** PASS fizic sau raportat cu rezultat concret nu înseamnă compatibilitate generală. Porturile care încă se compilează nu sunt marcate finalizate. Compilarea ARM64 pe Intel nu dovedește execuția nativă pe Apple Silicon. [Galeria A/B](../GALLERY.md) păstrează fotografiile reale ale hardwareului.
 
 **Atribuire:** [HAO original](https://github.com/lythka/hao-patcher), [HAO runtime](https://github.com/lythka/hao-runtime), OpenCore/OCLP; portare și teste pe MacBookPro9,1 de [StefanAlMare](https://github.com/StefanAlMare) cu asistență Codex. Nu publicăm software Apple, imagini de instalare ori jurnale private.

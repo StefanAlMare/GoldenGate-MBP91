@@ -29,6 +29,8 @@
 5. [Weather and battery/sound menu-bar observations — 25 November](WEATHER-MENUBAR-20261125.md) · [Română](WEATHER-MENUBAR-20261125.ro.md)
 6. [Source-only HAO APFS correction](patches/hao-livepatch-compression.patch) and [read-only future inventory helper](collect-macports.sh)
 
+**New visual evidence:** [Weather working on Build C — gallery image 11](../images/mbp91/11-weather-working-build-c-20261125.webp), with a bilingual explanation in the [gallery](../GALLERY.md).
+
 **Evidence policy:** PASS indicates preserved physical or operator test output. An ongoing MacPorts compile is not called a completed installation. Xcode building ARM64 code on Intel does **not** establish native execution on Apple Silicon. See the [existing Stage 1 gallery](../GALLERY.md) for authentic hardware screenshots.
 
 **Credits:** [lythka's HAO](https://github.com/lythka/hao-patcher), [HAO runtime](https://github.com/lythka/hao-runtime), OCLP/OpenCore; MacBookPro9,1 adaptation and real-device validation by [StefanAlMare](https://github.com/StefanAlMare), assisted by Codex. Apple proprietary software, private logs and installation images are not redistributed.

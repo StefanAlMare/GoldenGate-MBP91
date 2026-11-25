@@ -14,7 +14,7 @@
 | **Pictograma bateriei** | **PASS vizual după restart:** orientare corectă, capătul bateriei spre dreapta |
 | **Pictograma sunetului** | **PASS vizual după restart:** undele difuzorului spre dreapta |
 
-**Dovadă:** captura reală din **25 noiembrie, 23:29:29 EET**, prezintă aplicația Vremea deschisă în română, cu prognoze și panouri populate și pictogramele bateriei/sunetului în bara de meniu. Observațiile fizice Work4 confirmă suplimentar fundalul animat și harta mare. Captura a fost oferită privat și **nu este redistribuită în repository**.
+**Dovadă:** captura reală din **25 noiembrie, 23:29:29 EET**, prezintă aplicația Vremea deschisă în română, cu prognoze și panouri populate și pictogramele bateriei/sunetului în bara de meniu. Observațiile fizice Work4 confirmă suplimentar fundalul animat și harta mare. Cu acordul operatorului, **captura Vremea de 1680 × 1048 este acum publicată** în [galeria bilingvă MacBookPro9,1](../GALLERY.md) ca [imaginea 11](../images/mbp91/11-weather-working-build-c-20261125.webp), optimizată WebP.
 
 **Limite tehnice:** Work3/Work4 au comparat traseele grafice Intel și NVIDIA/Kepler. Miniatura a rămas incompletă inclusiv în probele cu Intel; funcționarea hărții mari sau a unei probe grafice nu validează automat mini-harta. Cauza precisă nu este confirmată. Această actualizare documentează rezultate, **nu pretinde publicarea unui patch sursă nou**.
 

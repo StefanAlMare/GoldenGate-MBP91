@@ -46,7 +46,7 @@
 <!-- MBP91-PHOTO-SECTION-START -->
 ## Fotografii — Golden Gate pe MacBookPro9,1 real
 
-Capturi autentice din **20 noiembrie 2026**, de pe modelul de 15″ MacBookPro9,1, nu de pe MacBookPro9,2 al autorului.
+Cele două capturi A/B evidențiate mai jos sunt din **20 noiembrie 2026**, de pe MacBookPro9,1 de 15″. Galeria completă include acum și **Vremea pe Build C, din 25 noiembrie**.
 
 <table>
 <tr>
@@ -55,7 +55,7 @@ Capturi autentice din **20 noiembrie 2026**, de pe modelul de 15″ MacBookPro9,
 </tr>
 </table>
 
-**[Vezi toate cele 10 capturi hardware →](golden-gate/GALLERY.md)** (Intel, NVIDIA, GMUX, Wi-Fi, Bluetooth, Ethernet, Thunderbolt 2, audio, stocare și cameră).
+**[Vezi toate cele 11 capturi →](golden-gate/GALLERY.md)** (zece imagini A/B și Vremea funcțională pe Build C).
 
 <!-- MBP91-PHOTO-SECTION-END -->
 
@@ -188,9 +188,9 @@ Aceasta este **o intervenție demonstrată pe calculatorul respectiv**, nu un re
 
 ## Galeria foto
 
-**Cele zece capturi autentice de pe MacBookPro9,1 sunt acum publicate.** Galeria documentează desktopul Golden Gate, cele două GPU, configurația cu monitor intern și extern, Wi-Fi, Bluetooth, Ethernet, Thunderbolt, audio, cameră și stocare. Cele două imagini principale sunt afișate mai sus, iar galeria completă permite deschiderea fiecărei capturi și include explicații în engleză și română. Vom putea adăuga fotografii suplimentare cu comutarea grafică la cererea aplicațiilor și reparațiile viitoare.
+**Sunt publicate 11 capturi autentice de pe MacBookPro9,1:** zece din 20 noiembrie și realizarea Vremea din Build C, din 25 noiembrie. Galeria documentează desktopul, cele două GPU, monitoarele, conectivitatea, audio, camera, stocarea și aplicația Vremea funcțională. Cele două imagini principale sunt afișate mai sus, iar galeria completă permite deschiderea fiecărei capturi și include explicații în engleză și română. Vom putea adăuga fotografii suplimentare cu comutarea grafică la cererea aplicațiilor și reparațiile viitoare.
 
-**[Vezi toate cele 10 capturi autentice](golden-gate/GALLERY.md)**
+**[Vezi toate cele 11 capturi autentice](golden-gate/GALLERY.md)**
 
 [Galeria originală HAO](docs/gallery.md) prezintă **MacBookPro9,2** și nu este folosită drept dovadă vizuală pentru 9,1.
 
@@ -204,7 +204,7 @@ Aceasta este **o intervenție demonstrată pe calculatorul respectiv**, nu un re
 | [Registru tehnic B](golden-gate/REGISTRU-TEHNIC-B.md) | Reparații, teste retrase și hash-uri |
 | [Etapele 2–13](golden-gate/etape-a/INDEX.md) | Scripturi istorice și surse de construire |
 | [Kit pentru volume](golden-gate/kit-volume/Citeste.md) | Inventar și probe NTFS/exFAT |
-| [Galeria foto](golden-gate/GALLERY.md) | Zece capturi autentice MacBookPro9,1, cu explicații bilingve |
+| [Galeria foto](golden-gate/GALLERY.md) | 11 capturi reale MacBookPro9,1, inclusiv Vremea pe Build C, cu explicații bilingve |
 | [Credite și licențe](NOTICE.md) | Atribuiri upstream |
 
 ## Ce urmează

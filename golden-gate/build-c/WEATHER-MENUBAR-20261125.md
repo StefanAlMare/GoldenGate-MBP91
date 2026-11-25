@@ -14,7 +14,7 @@
 | **Battery menu-bar icon** | **PASS (visual, after reboot):** orientation corrected; battery terminal on the right |
 | **Speaker/sound menu-bar icon** | **PASS (visual, after reboot):** sound waves point right |
 
-**Evidence:** operator's 25 November **23:29:29 EET** real-device screenshot displays Weather open in Romanian with populated forecast and detailed panels, plus battery/sound icons in the menu bar. Work4 physical observations additionally confirm animated background changes and the main map. The screenshot was provided privately and **is not redistributed in this repository**.
+**Evidence:** operator's 25 November **23:29:29 EET** real-device screenshot displays Weather open in Romanian with populated forecast and detailed panels, plus battery/sound icons in the menu bar. Work4 physical observations additionally confirm animated background changes and the main map. With the operator's permission, the **1680 × 1048 Weather screenshot is now published** in the [bilingual MacBookPro9,1 gallery](../GALLERY.md) as [image 11](../images/mbp91/11-weather-working-build-c-20261125.webp), optimized to WebP.
 
 **Technical scope:** Work3/Work4 compared Intel and NVIDIA/Kepler render paths. The mini-preview remained incomplete even with Intel selected during diagnostics; a completed large map or passing render probe does **not** prove the preview layer is fixed. No specific cause is certified from these observations, and no new source patch is claimed in this documentation-only milestone.
 

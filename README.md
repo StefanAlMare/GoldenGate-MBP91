@@ -46,7 +46,7 @@
 <!-- MBP91-PHOTO-SECTION-START -->
 ## Photographs — Golden Gate on the actual MacBookPro9,1
 
-Real screenshots from **20 November 2026**, taken on the 15-inch MacBookPro9,1—not from the upstream MacBookPro9,2.
+The two Stage 1 highlights below are from **20 November 2026** on the 15-inch MacBookPro9,1. The full gallery also includes the **Build C Weather screenshot from 25 November**.
 
 <table>
 <tr>
@@ -55,7 +55,7 @@ Real screenshots from **20 November 2026**, taken on the 15-inch MacBookPro9,1�
 </tr>
 </table>
 
-**[View all 10 hardware screenshots →](golden-gate/GALLERY.md)** (Intel, NVIDIA, GMUX, Wi-Fi, Bluetooth, Ethernet, Thunderbolt 2, audio, storage and camera).
+**[View all 11 screenshots →](golden-gate/GALLERY.md)** (the ten Stage 1 hardware captures plus Weather working on Build C).
 
 <!-- MBP91-PHOTO-SECTION-END -->
 
@@ -188,9 +188,9 @@ These are **specific engineering tasks**, not reasons to overlook the already wo
 
 ## Visual gallery
 
-**Ten authentic screenshots from the MacBookPro9,1 are now published.** The curated collection presents the Golden Gate desktop, both GPUs, the internal/external display configuration, Wi-Fi, Bluetooth, Ethernet, Thunderbolt, audio, camera and storage. The first two highlights are displayed above; the full gallery offers individual full-size views and bilingual captions. Additional photographs of app-triggered switching and future repairs can be added as new tests are documented.
+**Eleven authentic screenshots from the MacBookPro9,1 are now published:** ten from 20 November and the Weather Build C milestone from 25 November. The gallery presents the Golden Gate desktop, both GPUs, dual displays, connectivity, audio, camera, storage and the functioning Weather application. The first two highlights are displayed above; the full gallery offers individual full-size views and bilingual captions. Additional photographs of app-triggered switching and future repairs can be added as new tests are documented.
 
-**[View all 10 verified hardware screenshots](golden-gate/GALLERY.md)**
+**[View all 11 verified MacBookPro9,1 screenshots](golden-gate/GALLERY.md)**
 
 The [original HAO gallery](docs/gallery.md) illustrates the **13-inch MacBookPro9,2** and is not photographic proof of this 15-inch adaptation.
 
@@ -204,7 +204,7 @@ The [original HAO gallery](docs/gallery.md) illustrates the **13-inch MacBookPro
 | [Image B technical ledger](golden-gate/REGISTRU-TEHNIC-B.md) | Repairs, rollback experiments and hashes in Romanian |
 | [Source archive](golden-gate/etape-a/INDEX.md) | Original construction steps and script provenance |
 | [Volume test kit](golden-gate/kit-volume/README.md) | Volume inventory and automount test planning |
-| [Gallery](golden-gate/GALLERY.md) | Ten authentic MacBookPro9,1 screenshots with English/Romanian captions |
+| [Gallery](golden-gate/GALLERY.md) | Eleven real MacBookPro9,1 screenshots, including Build C Weather, with bilingual captions |
 | [Notices](NOTICE.md) | Licensing and upstream attribution |
 
 ## Next chapter
