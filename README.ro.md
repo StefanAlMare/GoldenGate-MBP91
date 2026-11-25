@@ -40,7 +40,7 @@
 
 **Documentația și dovezile, în ordinea execuției:** [**Prezentarea build-ului C (RO)**](golden-gate/build-c/README.ro.md) · [English](golden-gate/build-c/README.md) · [Cronologie](golden-gate/build-c/CHRONOLOGY.ro.md) · [Probe Clang (RO)](golden-gate/build-c/TOOLCHAIN-EVIDENCE.ro.md) · [EN](golden-gate/build-c/TOOLCHAIN-EVIDENCE.md) · [Xcode — 15 proiecte](golden-gate/build-c/XCODE.ro.md) · [Registrul MacPorts](golden-gate/build-c/MACPORTS.ro.md).
 
-*Fotografiile și descrierile A/B de mai jos sunt dovezi istorice din etapa 1. Buildurile Xcode prin CLI sunt confirmate; `⌘B` interactiv, execuția nativă Apple Silicon, lista finală de porturi și installerul general necesită teste distincte.*
+*Fotografiile și descrierile A/B de mai jos sunt dovezi istorice din etapa 1. Buildurile Xcode prin CLI și inventarul celor 173 de porturi MacPorts active sunt documentate; `⌘B` interactiv, execuția nativă Apple Silicon, verificarea individuală a compilării/funcționării porturilor și installerul general necesită teste distincte.*
 <!-- GOLDEN-GATE-C-20261123-END -->
 
 <!-- MBP91-PHOTO-SECTION-START -->

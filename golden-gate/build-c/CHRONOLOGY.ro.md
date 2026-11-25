@@ -2,7 +2,7 @@
 
 [**Română**](CHRONOLOGY.ro.md) · [**English**](CHRONOLOGY.md) · [Prezentare](README.ro.md)
 
-Perioada **20–25 noiembrie 2026**, după ultima publicare A/B. Mașina: MacBookPro9,1, Golden Gate **27.2.1 (26B131)**. Sunt păstrate și încercările eșuate, în ordinea reală a operațiilor. Surse: Work2, Work3, arhivele CLT/LD, raportul Xcode din 23 noiembrie și probele operatorului.
+Perioada **20–25 noiembrie 2026**, după ultima publicare A/B. Mașina: MacBookPro9,1, Golden Gate **27.2.1 (26B131)**. Sunt păstrate și încercările eșuate, în ordinea reală a operațiilor. Surse: Work2, Work3 și Work4, arhivele CLT/LD, raportul Xcode din 23 noiembrie, inventarul MacPorts din 24 noiembrie și verificările fizice Vremea/pictograme din 25 noiembrie.
 
 | Data | Pas | Ce am făcut | Rezultat |
 |:--|:--|:--|:--|

@@ -2,7 +2,7 @@
 
 [**English**](CHRONOLOGY.md) · [**Română**](CHRONOLOGY.ro.md) · [Overview](README.md)
 
-**Period:** 20–25 November 2026, starting after the last published A/B hardware milestone. Target: **MacBookPro9,1**, macOS **27.2.1 (26B131)**. Entries are in execution order, including failures, recoveries, and unfinished work. Sources: Work2/Work3 handover, local CLT/LD test reports, Xcode proof document (23 November), operator Clang report and macOS physical observations. This is not a claim of a turnkey installer.
+**Period:** 20–25 November 2026, starting after the last published A/B hardware milestone. Target: **MacBookPro9,1**, macOS **27.2.1 (26B131)**. Entries are in execution order, including failures, recoveries, and unfinished work. Sources: Work2/Work3/Work4 records, local CLT/LD tests, Xcode proof document (23 November), operator Clang and MacPorts reports, and 25 November physical Weather/menu-bar observations. This is not a claim of a turnkey installer.
 
 | Date | Step | Operation | Recorded outcome |
 |:--|:--|:--|:--|

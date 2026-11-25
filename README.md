@@ -40,7 +40,7 @@
 
 **Read the full evidence, source patch and temporal sequence:** [**Build C technical index (EN)**](golden-gate/build-c/README.md) · [Română](golden-gate/build-c/README.ro.md) · [Chronological record](golden-gate/build-c/CHRONOLOGY.md) · [Clang evidence](golden-gate/build-c/TOOLCHAIN-EVIDENCE.md) · [Xcode 15-project matrix](golden-gate/build-c/XCODE.md) · [MacPorts live ledger](golden-gate/build-c/MACPORTS.md).
 
-*The A/B photographs and descriptions below remain Stage 1 historical results from 20 November. Xcode CLI builds are verified; interactive IDE build, native Apple Silicon execution, full MacPorts inventory and a portable installer remain outside this milestone.*
+*The A/B photographs and descriptions below remain Stage 1 historical results from 20 November. Xcode CLI builds and the 173-port MacPorts active inventory are documented; interactive IDE builds, native Apple Silicon execution, individual MacPorts runtime/source-build certification and a portable installer remain outside this milestone.*
 <!-- GOLDEN-GATE-C-20261123-END -->
 
 <!-- MBP91-PHOTO-SECTION-START -->
